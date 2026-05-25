@@ -4,13 +4,27 @@ import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
+import { VenuesModule } from './venues/venues.module';
+import { CourtsModule } from './courts/courts.module';
+import { PricesModule } from './prices/prices.module';
+import { UsersModule } from './users/users.module';
 import { HealthModule } from './health/health.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { ResponseWrapperInterceptor } from './common/interceptors/response-wrapper.interceptor';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, RedisModule, AuthModule, HealthModule],
+  imports: [
+    ConfigModule,
+    PrismaModule,
+    RedisModule,
+    AuthModule,
+    VenuesModule,
+    CourtsModule,
+    PricesModule,
+    UsersModule,
+    HealthModule,
+  ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

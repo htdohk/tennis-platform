@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisHealthIndicator } from './redis.health-indicator';
 
-@Controller('health')
+@Controller('api/health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
