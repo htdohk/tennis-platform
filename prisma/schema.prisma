@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────
+
+enum VenueStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CourtType {
+  INDOOR
+  OUTDOOR
+}
+
+enum CourtSurface {
+  HARD
+  CLAY
+  SYNTHETIC
+}
+
+enum CourtStatus {
+  AVAILABLE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  BOSS
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum DateType {
+  WEEKDAY
+  WEEKEND
+  HOLIDAY
+}
+
+enum TimeSlotType {
+  MORNING
+  DAY
+  EVENING
+}
+
+enum OrderType {
+  NORMAL
+  RECRUIT
+}
+
+enum OrderStatus {
+  PENDING_CONFIRM
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  RECRUITING
+  RECRUITING_EXPIRED
+}
+
+enum PaidStatus {
+  UNPAID
+  PAID
+}
+
+enum RecruitPostStatus {
+  RECRUITING
+  CONFIRMED
+  CANCELLED
+  RECRUITING_EXPIRED
+}
+
+enum RecruitParticipantStatus {
+  JOINED
+  LEFT
+}
+
+enum McpApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+// ─── Models ───────────────────────────────────────────
+
+model Venue {
+  id                    String      @id @default(cuid())
+  name                  String
+  address               String
+  intro                 String?
+  defaultBusinessHours  Json?       @map("default_business_hours")
+  contact               String?
+  status                VenueStatus @default(ACTIVE)
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  courts     Court[]
+  priceRules PriceRule[]
+
+  @@map("venues")
+}
+
+model Court {
+  id           String       @id @default(cuid())
+  venueId      String       @map("venue_id")
+  code         String
+  name         String
+  type         CourtType
+  surface      CourtSurface
+  status       CourtStatus  @default(AVAILABLE)
+  specialHours Json?        @map("special_hours")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  venue        Venue              @relation(fields: [venueId], references: [id])
+  orders       Order[]
+  maintenances CourtMaintenance[]
+
+  @@map("courts")
+}
+
+model CourtMaintenance {
+  id        String    @id @default(cuid())
+  courtId   String    @map("court_id")
+  startAt   DateTime  @map("start_at")
+  endAt     DateTime  @map("end_at")
+  reason    String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  court     Court     @relation(fields: [courtId], references: [id])
+
+  @@map("court_maintenances")
+}
+
+model PriceRule {
+  id            String       @id @default(cuid())
+  venueId       String       @map("venue_id")
+  dateType      DateType     @map("date_type")
+  timeSlotType  TimeSlotType @map("time_slot_type")
+  timeStart     String       @map("time_start") // HH:mm
+  timeEnd       String       @map("time_end")   // HH:mm
+  pricePer30min Decimal      @map("price_per_30min") @db.Decimal(10, 2)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  venue         Venue        @relation(fields: [venueId], references: [id])
+
+  @@map("price_rules")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  phone        String     @unique
+  passwordHash String     @map("password_hash")
+  nickname     String
+  level        Decimal    @db.Decimal(2, 1)
+  wechatId     String     @map("wechat_id")
+  gender       Gender?
+  role         UserRole   @default(CUSTOMER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  orders              Order[]
+  recruitParticipants RecruitParticipant[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model Order {
+  id         String       @id @default(cuid())
+  userId     String       @map("user_id")
+  courtId    String       @map("court_id")
+  startAt    DateTime     @map("start_at")
+  endAt      DateTime     @map("end_at")
+  status     OrderStatus  @default(PENDING_CONFIRM)
+  type       OrderType    @default(NORMAL)
+  totalPrice Decimal?     @map("total_price") @db.Decimal(10, 2)
+  paidStatus PaidStatus   @default(UNPAID) @map("paid_status")
+  notes      String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  court       Court        @relation(fields: [courtId], references: [id])
+  recruitPost RecruitPost?
+
+  @@index([courtId, startAt, endAt])
+  @@map("orders")
+}
+
+model RecruitPost {
+  id              String             @id @default(cuid())
+  orderId         String             @unique @map("order_id")
+  targetLevel     Decimal            @map("target_level") @db.Decimal(2, 1)
+  levelTolerance  Decimal            @map("level_tolerance") @db.Decimal(2, 1) @default(0.5)
+  maxParticipants Int                @map("max_participants")
+  deadline        DateTime
+  status          RecruitPostStatus  @default(RECRUITING)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  order        Order                @relation(fields: [orderId], references: [id])
+  participants RecruitParticipant[]
+
+  @@map("recruit_posts")
+}
+
+model RecruitParticipant {
+  id            String                    @id @default(cuid())
+  recruitPostId String                    @map("recruit_post_id")
+  userId        String                    @map("user_id")
+  status        RecruitParticipantStatus  @default(JOINED)
+  joinedAt      DateTime                  @default(now()) @map("joined_at")
+
+  recruitPost   RecruitPost               @relation(fields: [recruitPostId], references: [id])
+  user          User                      @relation(fields: [userId], references: [id])
+
+  @@unique([recruitPostId, userId])
+  @@map("recruit_participants")
+}
+
+model McpApiKey {
+  id         String          @id @default(cuid())
+  key        String          @unique
+  name       String
+  scopes     String[]
+  lastUsedAt DateTime?       @map("last_used_at")
+  status     McpApiKeyStatus @default(ACTIVE)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  @@map("mcp_api_keys")
+}
+
+model SystemConfig {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?  @map("actor_id")
+  action    String
+  target    String
+  timestamp DateTime @default(now())
+  payload   Json?
+
+  actor     User?    @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String
+  content   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
