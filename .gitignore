@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.next/
+out/
+
+# env files
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+pgdata/
+redisdata/
+
+# Turbo
+.turbo/
+
+# Prisma
+prisma/*/*.db
+
+# logs
+*.log
+npm-debug.log*
+
+# test artifacts
+coverage/
+test-results/
+playwright-report/
+
+# misc
+*.pem
