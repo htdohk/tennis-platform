@@ -11,3 +11,9 @@
   - 建议:在每个 e2e spec 文件加 beforeEach/afterAll 清理
   - 或使用独立测试数据库 + 每次跑测试前 reset
   - 来源:M4 验证时观察到
+
+## 前端集成
+- [ ] GET /api/courts/:id/availability 返回格式只有 time(HH:MM),无完整 ISO 时间戳
+  - 前端下单时需要自己拼 date + time → startAt/endAt
+  - 建议 M10 实现前,让后端同时返回 startAt/endAt 完整时间戳,便于前端直接使用
+  - 来源:M5 验证时发现
