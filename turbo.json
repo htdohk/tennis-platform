@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalEnv": ["NEXT_PUBLIC_API_BASE_URL", "NEXT_PUBLIC_BRAND_NAME"],
   "tasks": {
     "dev": {
       "cache": false,
