@@ -268,4 +268,36 @@ export class OrdersService {
       });
     });
   }
+
+  /**
+   * Get all orders for schedule board within a date range.
+   * Returns orders with court, user, and recruitPost info.
+   */
+  async getSchedule(from: string, to: string) {
+    const fromDate = new Date(`${from}T00:00:00Z`);
+    const toDate = new Date(`${to}T23:59:59Z`);
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        startAt: { gte: fromDate },
+        endAt: { lte: toDate },
+      },
+      include: {
+        court: { include: { venue: true } },
+        user: {
+          select: {
+            id: true,
+            nickname: true,
+            phone: true,
+            level: true,
+            wechatId: true,
+          },
+        },
+        recruitPost: true,
+      },
+      orderBy: [{ startAt: 'asc' }, { court: { code: 'asc' } }],
+    });
+
+    return orders;
+  }
 }

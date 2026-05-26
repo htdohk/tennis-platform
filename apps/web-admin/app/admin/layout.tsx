@@ -7,15 +7,19 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, MapPin, Grid3X3, DollarSign, Users,
+  Calendar, ClipboardList, UserPlus,
   LogOut, Menu, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/schedule", label: "日程看板", icon: Calendar },
+  { href: "/admin/orders", label: "订单管理", icon: ClipboardList },
   { href: "/admin/venues", label: "场馆管理", icon: MapPin },
   { href: "/admin/courts", label: "场地管理", icon: Grid3X3 },
   { href: "/admin/prices", label: "价格管理", icon: DollarSign },
+  { href: "/admin/recruits", label: "招募管理", icon: UserPlus },
   { href: "/admin/users", label: "用户管理", icon: Users },
 ];
 
