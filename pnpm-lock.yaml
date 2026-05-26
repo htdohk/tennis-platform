@@ -68,6 +68,9 @@ importers:
       '@prisma/client':
         specifier: ^7.8.0
         version: 7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      '@tennis/shared-utils':
+        specifier: workspace:*
+        version: link:../../packages/shared-utils
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0

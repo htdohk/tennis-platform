@@ -30,7 +30,7 @@ describe('M4 E2E: Core Business Modules', () => {
     await app.close();
   });
 
-  const phone = `138${Date.now().toString().slice(-8)}`;
+  const phone = `137${Date.now().toString().slice(-8)}`;
   const adminPhone = '13800000000';
 
   // ─── C端: 注册 → 登录 → 拿 token → 修改资料 ───
