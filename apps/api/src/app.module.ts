@@ -10,6 +10,7 @@ import { PricesModule } from './prices/prices.module';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { RecruitsModule } from './recruits/recruits.module';
+import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -27,6 +28,7 @@ import { ResponseWrapperInterceptor } from './common/interceptors/response-wrapp
     UsersModule,
     OrdersModule,
     RecruitsModule,
+    JobsModule,
     HealthModule,
   ],
   providers: [
