@@ -17,3 +17,15 @@
   - 前端下单时需要自己拼 date + time → startAt/endAt
   - 建议 M10 实现前,让后端同时返回 startAt/endAt 完整时间戳,便于前端直接使用
   - 来源:M5 验证时发现
+
+## 订单模块
+- [ ] totalPrice 计算结果为 0,需排查价格规则匹配逻辑
+  - 场地 cmplfryfd(A2) + 工作日 10:00-12:00 应有价格
+  - 可能是 DateType 判断或场地-价格规则关联问题
+  - 来源:M5 验证时发现,MVP 线下付款暂不影响流程
+
+- [ ] 错误响应 details 字段暴露完整堆栈(文件路径+行号)
+  - 生产环境需隐藏,只在开发环境显示
+  - 在 GlobalExceptionFilter 中根据 NODE_ENV 判断是否暴露 stack
+  - 来源:M5 状态机测试时发现,M13 部署配置时处理
+
