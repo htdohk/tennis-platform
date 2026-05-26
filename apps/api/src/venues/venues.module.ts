@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { VenuesService } from './venues.service';
 import { VenuesController } from './venues.controller';
+import { PublicVenuesController } from './public-venues.controller';
+import { CourtsModule } from '../courts/courts.module';
 
 @Module({
-  controllers: [VenuesController],
+  imports: [CourtsModule],
+  controllers: [VenuesController, PublicVenuesController],
   providers: [VenuesService],
   exports: [VenuesService],
 })

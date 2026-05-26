@@ -1,65 +1,72 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import Link from "next/link";
+
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "网球馆";
+
+export default function HomePage() {
+  const { data: venuesRes } = useQuery({
+    queryKey: ["venues"],
+    queryFn: () => api.get<{ data: { id: string; name: string; address: string; intro: string | null }[] }>("/api/venues"),
+  });
+  const { data: recruitsRes } = useQuery({
+    queryKey: ["recruits"],
+    queryFn: () => api.get<{ data: { id: string; status: string; order: { startAt: string; court: { name: string } }; targetLevel: string; maxParticipants: number; participants: { id: string }[] }[] }>("/api/recruits"),
+  });
+
+  const venues = venuesRes?.data || [];
+  const recruits = (recruitsRes?.data || []).filter((r) => r.status === "RECRUITING");
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-8">
+      <section className="text-center py-12">
+        <h1 className="text-3xl font-bold mb-2">{BRAND}</h1>
+        <p className="text-gray-500 mb-6">在线预订网球场，轻松找到球友</p>
+        <Link href="/booking" className="inline-block bg-black text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors">
+          立即预订
+        </Link>
+      </section>
+
+      {venues.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold mb-4">场馆</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {venues.map((v) => (
+              <Link key={v.id} href={`/venues/${v.id}`}>
+                <div className="border rounded-xl p-4 bg-white hover:shadow-md transition-shadow">
+                  <h3 className="font-bold text-lg">{v.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">{v.address}</p>
+                  {v.intro && <p className="text-sm text-gray-400 mt-2 line-clamp-2">{v.intro}</p>}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {recruits.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold mb-4">进行中的招募</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {recruits.slice(0, 6).map((r) => (
+              <div key={r.id} className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium">段位 {String(r.targetLevel)}</p>
+                    <p className="text-xs text-gray-500 mt-1">{r.order?.court?.name}</p>
+                    <p className="text-xs text-gray-400">{new Date(r.order?.startAt).toLocaleString("zh-CN")}</p>
+                  </div>
+                  <span className="text-sm text-blue-600 font-medium">
+                    {r.participants?.length || 0}/{r.maxParticipants}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

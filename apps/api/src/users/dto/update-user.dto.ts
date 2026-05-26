@@ -6,7 +6,7 @@ import {
   MinLength,
   Validate,
 } from 'class-validator';
-import { UserStatus } from '@prisma/client';
+import { UserStatus, Gender } from '@prisma/client';
 import { IsValidTennisLevel } from '../../common/validators/tennis-level.validator';
 
 export class UpdateUserDto {
@@ -23,6 +23,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   wechatId?: string;
+
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
 
   @IsOptional()
   @IsEnum(UserStatus)
