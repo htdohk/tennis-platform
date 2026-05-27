@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,8 +20,8 @@ interface MatchData {
   nickname: string;
   level: number;
   wechatId: string;
-  targetLevel: number;
-  levelTolerance: number;
+  minLevel: number;
+  maxLevel: number;
   startAt: string;
   endAt: string;
   participantCount: number;
@@ -52,8 +53,8 @@ export default function NewRecruitPage() {
   const [courtId, setCourtId] = useState(draft.courtId || "");
   const [date, setDate] = useState(draft.date || "");
   const [selectedSlots, setSelectedSlots] = useState<string[]>(draft.startSlot ? [draft.startSlot as string] : []);
-  const [targetLevel, setTargetLevel] = useState(3.0);
-  const [levelTolerance, setLevelTolerance] = useState(0.5);
+  const [minLevel, setMinLevel] = useState(2.5);
+  const [maxLevel, setMaxLevel] = useState(4.0);
   const [maxParticipants, setMaxParticipants] = useState(2);
   const [deadlineDate, setDeadlineDate] = useState(draft.deadlineDate || "");
   const [deadlineHour, setDeadlineHour] = useState("23");
@@ -125,7 +126,7 @@ export default function NewRecruitPage() {
 
   // Create recruit
   const createMut = useMutation({
-    mutationFn: (data: { courtId: string; startAt: string; endAt: string; targetLevel: number; levelTolerance: number; maxParticipants: number; deadline: string; notes?: string }) =>
+    mutationFn: (data: { courtId: string; startAt: string; endAt: string; minLevel: number; maxLevel: number; maxParticipants: number; deadline: string; notes?: string }) =>
       api.post<{ code: number; data: { id: string } }>("/api/recruits", data),
     onSuccess: (res) => {
       sessionStorage.removeItem(DRAFT_KEY);
@@ -198,16 +199,12 @@ export default function NewRecruitPage() {
       const res = await api.post<{ code: number; data: MatchData[] }>("/api/recruits/preview-matches", {
         date, startAt: new Date(`${date}T${startTime}:00`).toISOString(),
         endAt: new Date(`${date}T${endTime}:00`).toISOString(),
-        level: targetLevel, tolerance: levelTolerance,
+        minLevel, maxLevel,
       });
       const matchList = res.data || [];
       // Filter: only show matches where current user's level fits the match's requirements
       const validMatches = currentLevel
-        ? matchList.filter((m) => {
-            const lo = Number(m.targetLevel) - Number(m.levelTolerance);
-            const hi = Number(m.targetLevel) + Number(m.levelTolerance);
-            return currentLevel >= lo && currentLevel <= hi;
-          })
+        ? matchList.filter((m) => currentLevel >= m.minLevel && currentLevel <= m.maxLevel)
         : matchList;
 
       if (validMatches.length > 0) {
@@ -226,7 +223,7 @@ export default function NewRecruitPage() {
     createMut.mutate({
       courtId, startAt: new Date(`${date}T${startTime}:00`).toISOString(),
       endAt: new Date(`${date}T${endTime}:00`).toISOString(),
-      targetLevel, levelTolerance, maxParticipants,
+      minLevel, maxLevel, maxParticipants,
       deadline: new Date(`${deadlineDate}T${deadlineHour}:${deadlineMinute}:00`).toISOString(),
       notes: notes || undefined,
     });
@@ -317,25 +314,29 @@ export default function NewRecruitPage() {
       {selectedSlots.length > 0 && (
         <Card><CardContent className="p-4 space-y-3">
           <h3 className="font-medium text-sm text-gray-500">招募设置</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>目标段位</Label>
-              <Select value={String(targetLevel)} onValueChange={(v) => setTargetLevel(parseFloat(v || "3.0"))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[280px]">
-                  {[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0].map((v) => <SelectItem key={v} value={String(v)}>{v.toFixed(1)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span>段位要求</span>
+              <span className="font-medium text-green-700">{minLevel.toFixed(1)} ~ {maxLevel.toFixed(1)}</span>
             </div>
-            <div>
-              <Label>浮动范围</Label>
-              <Select value={String(levelTolerance)} onValueChange={(v) => setLevelTolerance(parseFloat(v || "0.5"))}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[280px]">
-                  {[0, 0.5, 1.0, 1.5, 2.0].map((v) => <SelectItem key={v} value={String(v)}>± {v.toFixed(1)}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1">
+              <Label className="text-xs text-gray-500">最低段位：{minLevel.toFixed(1)}</Label>
+              <Slider min={1.0} max={5.0} step={0.5} value={minLevel} onValueChange={(v) => { setMinLevel(v); if (v > maxLevel) setMaxLevel(v); }} />
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-gray-500">最高段位：{maxLevel.toFixed(1)}</Label>
+              <Slider min={1.0} max={5.0} step={0.5} value={maxLevel} onValueChange={(v) => { setMaxLevel(v); if (v < minLevel) setMinLevel(v); }} />
+            </div>
+            {currentLevel > 0 && (currentLevel < minLevel || currentLevel > maxLevel) && (
+              <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                ⚠️ 你的段位（{currentLevel.toFixed(1)}）不在要求范围内，你将以组织者身份发起此局
+              </p>
+            )}
+            {currentLevel > 0 && currentLevel >= minLevel && currentLevel <= maxLevel && (
+              <p className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                ✓ 你的段位（{currentLevel.toFixed(1)}）在要求范围内
+              </p>
+            )}
           </div>
           <div>
             <Label>招募人数</Label>
@@ -394,7 +395,7 @@ export default function NewRecruitPage() {
                   <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">段位 {m.level}</span>
                 </div>
                 <div className="text-gray-600">{m.courtName} · {new Date(m.startAt).toLocaleString("zh-CN")} ~ {new Date(m.endAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
-                <div className="text-gray-500">要求 {String(m.targetLevel)} ± {String(m.levelTolerance)}</div>
+                <div className="text-gray-500">要求 {m.minLevel} ~ {m.maxLevel}</div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-xs">
                     <span className="text-gray-400">微信号: {m.wechatId}</span>

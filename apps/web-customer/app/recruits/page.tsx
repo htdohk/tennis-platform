@@ -133,6 +133,8 @@ export default function RecruitsPage() {
             <div className="space-y-3">
               {recruits.map((r) => {
                 const isOwn = currentUserId === r.order?.userId;
+                const min = (r as Record<string,unknown>).minLevel != null ? Number((r as Record<string,unknown>).minLevel) : Number(r.targetLevel) - Number(r.levelTolerance);
+                const max = (r as Record<string,unknown>).maxLevel != null ? Number((r as Record<string,unknown>).maxLevel) : Number(r.targetLevel) + Number(r.levelTolerance);
                 return (
                   <Card key={r.id} className="hover:shadow-sm transition-shadow">
                     <CardContent className="p-4">
@@ -144,7 +146,7 @@ export default function RecruitsPage() {
                           </div>
                           <div className="text-sm text-gray-600">{r.order?.court?.name} · {new Date(r.order?.startAt).toLocaleString("zh-CN")} ~ {new Date(r.order?.endAt).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}</div>
                           <div className="flex items-center gap-3 text-xs text-gray-500">
-                            <span>要求 {String(r.targetLevel)} ± {String(r.levelTolerance)}</span><span>截止 {new Date(r.deadline).toLocaleString("zh-CN")}</span>
+                            <span>要求 {min} ~ {max}</span><span>截止 {new Date(r.deadline).toLocaleString("zh-CN")}</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
                             {isOwn ? (
@@ -186,6 +188,8 @@ export default function RecruitsPage() {
               ) : (
                 myOrders.filter((o)=>o.type==="RECRUIT"&&o.recruitPost).map((o) => {
                   const rp = o.recruitPost!;
+                  const min = (rp as Record<string,unknown>).minLevel != null ? Number((rp as Record<string,unknown>).minLevel) : Number(rp.targetLevel) - Number(rp.levelTolerance);
+                  const max = (rp as Record<string,unknown>).maxLevel != null ? Number((rp as Record<string,unknown>).maxLevel) : Number(rp.targetLevel) + Number(rp.levelTolerance);
                   const joined = rp.participants?.filter((p: { status: string })=>p.status==="JOINED").length||0;
                   const isOwn = currentUserId !== null; // we don't have userId on order in this response
                   return (
@@ -198,7 +202,7 @@ export default function RecruitsPage() {
                               <span className={cn("text-xs px-2 py-0.5 rounded font-medium", STATUS_COLORS[rp.status]||"bg-gray-100 text-gray-800")}>{STATUS_LABELS[rp.status]||rp.status}</span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1">{new Date(o.startAt).toLocaleString("zh-CN")} ~ {new Date(o.endAt).toLocaleString("zh-CN")}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">段位 {String(rp.targetLevel)} ± {String(rp.levelTolerance)} · {joined}/{rp.maxParticipants} 人 · 截止 {new Date(rp.deadline).toLocaleString("zh-CN")}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">段位 {min} ~ {max} · {joined}/{rp.maxParticipants} 人 · 截止 {new Date(rp.deadline).toLocaleString("zh-CN")}</div>
                           </div>
                           <Button size="sm" variant="outline" onClick={()=>router.push(`/recruits/${rp.id}`)}>详情</Button>
                         </div>

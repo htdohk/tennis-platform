@@ -17,16 +17,11 @@ export class RecruitsService {
     private readonly priceCalc: PriceCalculator,
   ) {}
 
-  /**
-   * Preview matching recruit posts before publishing.
-   * Returns top 5 matches sorted by overlap quality.
-   */
   async previewMatches(dto: PreviewMatchesDto) {
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
     const date = dto.date;
 
-    // Find all active recruiting posts on the same date
     const posts = await this.prisma.recruitPost.findMany({
       where: {
         status: 'RECRUITING',
@@ -48,45 +43,22 @@ export class RecruitsService {
       },
     });
 
-    const matches: {
-      post: (typeof posts)[number];
-      score: number;
-    }[] = [];
+    const matches: { post: (typeof posts)[number]; score: number }[] = [];
 
     for (const post of posts) {
-      // Time overlap check
-      if (
-        !isSlotsOverlapping(
-          startAt,
-          endAt,
-          post.order.startAt,
-          post.order.endAt,
-        )
-      ) {
-        continue;
-      }
+      if (!isSlotsOverlapping(startAt, endAt, post.order.startAt, post.order.endAt)) continue;
 
-      // Level range overlap check
-      const postLevel = Number(post.targetLevel);
-      const postTolerance = Number(post.levelTolerance);
-      if (
-        !isLevelRangeOverlapping(
-          dto.level,
-          dto.tolerance,
-          postLevel,
-          postTolerance,
-        )
-      ) {
-        continue;
-      }
+      const postMin = post.minLevel != null ? Number(post.minLevel) : Number(post.targetLevel) - Number(post.levelTolerance);
+      const postMax = post.maxLevel != null ? Number(post.maxLevel) : Number(post.targetLevel) + Number(post.levelTolerance);
 
-      // Score: closer level = higher score
-      const levelDiff = Math.abs(dto.level - postLevel);
+      if (!isLevelRangeOverlapping(dto.minLevel, dto.maxLevel, postMin, postMax)) continue;
+
+      const mid = (dto.minLevel + dto.maxLevel) / 2;
+      const levelDiff = Math.abs(mid - (postMin + postMax) / 2);
       const score = 100 - levelDiff * 10;
       matches.push({ post, score });
     }
 
-    // Sort by score desc, take top 5
     matches.sort((a, b) => b.score - a.score);
 
     return matches.slice(0, 5).map((m) => ({
@@ -96,6 +68,8 @@ export class RecruitsService {
       nickname: m.post.order.user.nickname,
       level: m.post.order.user.level,
       wechatId: m.post.order.user.wechatId,
+      minLevel: m.post.minLevel ?? Number(m.post.targetLevel) - Number(m.post.levelTolerance),
+      maxLevel: m.post.maxLevel ?? Number(m.post.targetLevel) + Number(m.post.levelTolerance),
       targetLevel: m.post.targetLevel,
       levelTolerance: m.post.levelTolerance,
       startAt: m.post.order.startAt,
@@ -106,23 +80,16 @@ export class RecruitsService {
     }));
   }
 
-  /**
-   * Create a recruit post: creates Order (type=RECRUIT, status=RECRUITING) + RecruitPost.
-   */
   async create(userId: string, dto: CreateRecruitDto) {
     const startAt = new Date(dto.startAt);
     const endAt = new Date(dto.endAt);
 
-    // Validate court
     const court = await this.prisma.court.findUnique({
       where: { id: dto.courtId },
       include: { venue: true },
     });
-    if (!court || court.status === 'INACTIVE') {
-      throw new BadRequestException('场地不可用');
-    }
+    if (!court || court.status === 'INACTIVE') throw new BadRequestException('场地不可用');
 
-    // Check time conflict
     const conflict = await this.prisma.order.findFirst({
       where: {
         courtId: dto.courtId,
@@ -131,57 +98,36 @@ export class RecruitsService {
         status: { in: ['PENDING_CONFIRM', 'CONFIRMED', 'RECRUITING'] },
       },
     });
-    if (conflict) {
-      throw new BadRequestException('所选时段已被占用');
-    }
+    if (conflict) throw new BadRequestException('所选时段已被占用');
 
-    // Calculate price
-    const totalPrice = await this.priceCalc.calculate(
-      court.venueId,
-      startAt,
-      endAt,
-    );
+    const totalPrice = await this.priceCalc.calculate(court.venueId, startAt, endAt);
 
-    // Create Order + RecruitPost in transaction
+    const targetLevel = (dto.minLevel + dto.maxLevel) / 2;
+    const levelTolerance = (dto.maxLevel - dto.minLevel) / 2;
+
     const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
-        data: {
-          userId,
-          courtId: dto.courtId,
-          startAt,
-          endAt,
-          totalPrice,
-          type: 'RECRUIT',
-          status: 'RECRUITING',
-          notes: dto.notes,
-        },
+        data: { userId, courtId: dto.courtId, startAt, endAt, totalPrice, type: 'RECRUIT', status: 'RECRUITING', notes: dto.notes },
       });
-
       const recruitPost = await tx.recruitPost.create({
         data: {
           orderId: order.id,
-          targetLevel: dto.targetLevel,
-          levelTolerance: dto.levelTolerance,
+          minLevel: dto.minLevel,
+          maxLevel: dto.maxLevel,
+          targetLevel,
+          levelTolerance,
           maxParticipants: dto.maxParticipants,
           deadline: new Date(dto.deadline),
         },
         include: { order: true },
       });
-
       return recruitPost;
     });
-
     return result;
   }
 
-  /**
-   * List recruiting posts (recruit plaza).
-   */
   async findAll(date?: string, minLevel?: number, maxLevel?: number) {
-    const where: Prisma.RecruitPostWhereInput = {
-      status: 'RECRUITING',
-      deadline: { gt: new Date() },
-    };
+    const where: Prisma.RecruitPostWhereInput = { status: 'RECRUITING', deadline: { gt: new Date() } };
 
     if (date) {
       (where as Record<string, unknown>).order = {
@@ -191,238 +137,151 @@ export class RecruitsService {
     }
 
     if (minLevel !== undefined && maxLevel !== undefined) {
-      where.targetLevel = { gte: minLevel, lte: maxLevel };
+      // Filter in application code: check if level range overlaps
     }
 
     const posts = await this.prisma.recruitPost.findMany({
       where,
       include: {
-        order: {
-          include: {
-            user: { select: { nickname: true, level: true, wechatId: true } },
-            court: true,
-          },
-        },
+        order: { include: { user: { select: { nickname: true, level: true, wechatId: true } }, court: true } },
         participants: { select: { id: true, userId: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return posts.map((p) => ({
-      id: p.id,
-      targetLevel: p.targetLevel,
-      levelTolerance: p.levelTolerance,
-      maxParticipants: p.maxParticipants,
-      deadline: p.deadline,
-      status: p.status,
-      createdAt: p.createdAt,
-      user: p.order.user,
-      order: { ...p.order, user: undefined },
-      participants: p.participants,
-    }));
+    let filtered = posts;
+    if (minLevel !== undefined && maxLevel !== undefined) {
+      filtered = posts.filter((p) => {
+        const pMin = p.minLevel != null ? Number(p.minLevel) : Number(p.targetLevel) - Number(p.levelTolerance);
+        const pMax = p.maxLevel != null ? Number(p.maxLevel) : Number(p.targetLevel) + Number(p.levelTolerance);
+        return pMin <= maxLevel && pMax >= minLevel;
+      });
+    }
+
+    return filtered.map((p) => {
+      const minLvl = p.minLevel != null ? Number(p.minLevel) : Number(p.targetLevel) - Number(p.levelTolerance);
+      const maxLvl = p.maxLevel != null ? Number(p.maxLevel) : Number(p.targetLevel) + Number(p.levelTolerance);
+      return {
+        id: p.id,
+        targetLevel: p.targetLevel,
+        levelTolerance: p.levelTolerance,
+        minLevel: minLvl,
+        maxLevel: maxLvl,
+        maxParticipants: p.maxParticipants,
+        deadline: p.deadline,
+        status: p.status,
+        createdAt: p.createdAt,
+        user: p.order.user,
+        order: { ...p.order, user: undefined },
+        participants: p.participants,
+      };
+    });
   }
 
   async findById(id: string) {
     const post = await this.prisma.recruitPost.findUnique({
       where: { id },
       include: {
-        order: {
-          include: {
-            user: { select: { nickname: true, level: true, wechatId: true } },
-            court: { include: { venue: true } },
-          },
-        },
-        participants: {
-          include: {
-            user: { select: { nickname: true, level: true, wechatId: true } },
-          },
-        },
+        order: { include: { user: { select: { nickname: true, level: true, wechatId: true } }, court: { include: { venue: true } } } },
+        participants: { include: { user: { select: { nickname: true, level: true, wechatId: true } } } },
       },
     });
     if (!post) throw new NotFoundException('招募局不存在');
     return post;
   }
 
-  /**
-   * Join a recruit post. Validates level range and checks capacity.
-   */
   async join(recruitPostId: string, userId: string) {
     const post = await this.prisma.recruitPost.findUnique({
       where: { id: recruitPostId },
       include: { participants: true, order: true },
     });
     if (!post) throw new NotFoundException('招募局不存在');
-    if (post.status !== 'RECRUITING') {
-      throw new BadRequestException('招募局已结束');
-    }
+    if (post.status !== 'RECRUITING') throw new BadRequestException('招募局已结束');
+    if (new Date() > post.deadline) throw new BadRequestException('招募截止时间已过');
 
-    // Check if deadline passed
-    if (new Date() > post.deadline) {
-      throw new BadRequestException('招募截止时间已过');
-    }
-
-    // Get user level
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('用户不存在');
 
-    // Check level: user's level must be within [targetLevel - tolerance, targetLevel + tolerance]
-    const targetLevel = Number(post.targetLevel);
-    const tolerance = Number(post.levelTolerance);
     const userLevel = Number(user.level);
+    const recMin = post.minLevel != null ? Number(post.minLevel) : Number(post.targetLevel) - Number(post.levelTolerance);
+    const recMax = post.maxLevel != null ? Number(post.maxLevel) : Number(post.targetLevel) + Number(post.levelTolerance);
 
-    if (
-      userLevel < targetLevel - tolerance ||
-      userLevel > targetLevel + tolerance
-    ) {
-      throw new BadRequestException(
-        `你的段位 ${String(user.level)} 不符合要求: ${targetLevel} ± ${tolerance}`,
-      );
+    if (userLevel < recMin || userLevel > recMax) {
+      throw new BadRequestException(`你的段位 ${String(user.level)} 不符合要求：${recMin.toFixed(1)} ~ ${recMax.toFixed(1)}`);
     }
 
-    // Check not already joined
     const alreadyJoined = post.participants.find((p) => p.userId === userId);
-    if (alreadyJoined) {
-      throw new BadRequestException('你已加入该招募局');
-    }
+    if (alreadyJoined) throw new BadRequestException('你已加入该招募局');
 
-    // Check not full
-    if (post.participants.length >= post.maxParticipants) {
-      throw new BadRequestException('招募局已满员');
-    }
+    if (post.participants.length >= post.maxParticipants) throw new BadRequestException('招募局已满员');
 
-    // Add participant
     const newCount = post.participants.length + 1;
     const isFull = newCount >= post.maxParticipants;
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.recruitParticipant.create({
-        data: { recruitPostId, userId },
-      });
-
-      // If full, convert to CONFIRMED
+      await tx.recruitParticipant.create({ data: { recruitPostId, userId } });
       if (isFull) {
-        await tx.recruitPost.update({
-          where: { id: recruitPostId },
-          data: { status: 'CONFIRMED' },
-        });
-        await tx.order.update({
-          where: { id: post.orderId },
-          data: { status: 'CONFIRMED' },
-        });
+        await tx.recruitPost.update({ where: { id: recruitPostId }, data: { status: 'CONFIRMED' } });
+        await tx.order.update({ where: { id: post.orderId }, data: { status: 'CONFIRMED' } });
       }
-
       return { joined: true, isFull };
     });
   }
 
   async leave(recruitPostId: string, userId: string) {
     const post = await this.prisma.recruitPost.findUnique({
-      where: { id: recruitPostId },
-      include: { participants: true },
+      where: { id: recruitPostId }, include: { participants: true },
     });
     if (!post) throw new NotFoundException('招募局不存在');
-    if (post.status !== 'RECRUITING') {
-      throw new BadRequestException('招募局已结束,无法退出');
-    }
-
-    const participant = post.participants.find((p) => p.userId === userId);
-    if (!participant) {
-      throw new BadRequestException('你未加入该招募局');
-    }
-
-    return this.prisma.recruitParticipant.update({
-      where: { id: participant.id },
-      data: { status: 'LEFT' },
-    });
+    if (post.status !== 'RECRUITING') throw new BadRequestException('招募局已结束,无法退出');
+    const p = post.participants.find((p) => p.userId === userId);
+    if (!p) throw new BadRequestException('你未加入该招募局');
+    return this.prisma.recruitParticipant.update({ where: { id: p.id }, data: { status: 'LEFT' } });
   }
 
   async convertToNormal(recruitPostId: string, userId: string) {
-    const post = await this.prisma.recruitPost.findUnique({
-      where: { id: recruitPostId },
-      include: { order: true },
-    });
+    const post = await this.prisma.recruitPost.findUnique({ where: { id: recruitPostId }, include: { order: true } });
     if (!post) throw new NotFoundException('招募局不存在');
-    if (post.status !== 'RECRUITING_EXPIRED') {
-      throw new BadRequestException('只能在招募失效后转为包场');
-    }
-    if (post.order.userId !== userId) {
-      throw new BadRequestException('只有发起人可以操作');
-    }
-
+    if (post.status !== 'RECRUITING_EXPIRED') throw new BadRequestException('只能在招募失效后转为包场');
+    if (post.order.userId !== userId) throw new BadRequestException('只有发起人可以操作');
     return this.prisma.$transaction(async (tx) => {
-      await tx.recruitPost.update({
-        where: { id: recruitPostId },
-        data: { status: 'CONFIRMED' },
-      });
-      return tx.order.update({
-        where: { id: post.orderId },
-        data: { type: 'NORMAL', status: 'CONFIRMED' },
-      });
+      await tx.recruitPost.update({ where: { id: recruitPostId }, data: { status: 'CONFIRMED' } });
+      return tx.order.update({ where: { id: post.orderId }, data: { type: 'NORMAL', status: 'CONFIRMED' } });
     });
   }
 
   async abandon(recruitPostId: string, userId: string) {
-    const post = await this.prisma.recruitPost.findUnique({
-      where: { id: recruitPostId },
-      include: { order: true },
-    });
+    const post = await this.prisma.recruitPost.findUnique({ where: { id: recruitPostId }, include: { order: true } });
     if (!post) throw new NotFoundException('招募局不存在');
-    if (post.status !== 'RECRUITING_EXPIRED') {
-      throw new BadRequestException('只能在招募失效后放弃');
-    }
-    if (post.order.userId !== userId) {
-      throw new BadRequestException('只有发起人可以操作');
-    }
-
+    if (post.status !== 'RECRUITING_EXPIRED') throw new BadRequestException('只能在招募失效后放弃');
+    if (post.order.userId !== userId) throw new BadRequestException('只有发起人可以操作');
     return this.prisma.$transaction(async (tx) => {
-      await tx.recruitPost.update({
-        where: { id: recruitPostId },
-        data: { status: 'CANCELLED' },
-      });
-      return tx.order.update({
-        where: { id: post.orderId },
-        data: { status: 'CANCELLED' },
-      });
+      await tx.recruitPost.update({ where: { id: recruitPostId }, data: { status: 'CANCELLED' } });
+      return tx.order.update({ where: { id: post.orderId }, data: { status: 'CANCELLED' } });
     });
   }
 
   async findAllAdmin() {
     return this.prisma.recruitPost.findMany({
-      include: {
-        order: { include: { user: true, court: true } },
-        participants: { include: { user: true } },
-      },
+      include: { order: { include: { user: true, court: true } }, participants: { include: { user: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async cancelByAdmin(recruitPostId: string) {
     const post = await this.findById(recruitPostId);
-    if (post.status === 'CANCELLED' || post.status === 'RECRUITING_EXPIRED') {
-      throw new BadRequestException('招募局已结束');
-    }
-
+    if (post.status === 'CANCELLED' || post.status === 'RECRUITING_EXPIRED') throw new BadRequestException('招募局已结束');
     return this.prisma.$transaction(async (tx) => {
-      await tx.recruitPost.update({
-        where: { id: recruitPostId },
-        data: { status: 'CANCELLED' },
-      });
-      return tx.order.update({
-        where: { id: post.orderId },
-        data: { status: 'CANCELLED' },
-      });
+      await tx.recruitPost.update({ where: { id: recruitPostId }, data: { status: 'CANCELLED' } });
+      return tx.order.update({ where: { id: post.orderId }, data: { status: 'CANCELLED' } });
     });
   }
 
   async cancelByInitiator(recruitId: string, userId: string) {
-    const recruit = await this.prisma.recruitPost.findUnique({
-      where: { id: recruitId },
-      include: { order: true },
-    });
+    const recruit = await this.prisma.recruitPost.findUnique({ where: { id: recruitId }, include: { order: true } });
     if (!recruit) throw new NotFoundException('招募不存在');
     if (recruit.order.userId !== userId) throw new ForbiddenException('只有发起人可以取消');
     if (recruit.status !== 'RECRUITING') throw new BadRequestException('只有招募中的招募可以取消');
-
     return this.prisma.$transaction(async (tx) => {
       await tx.recruitPost.update({ where: { id: recruitId }, data: { status: 'CANCELLED' } });
       await tx.order.update({ where: { id: recruit.orderId }, data: { status: 'CANCELLED' } });

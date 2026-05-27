@@ -58,12 +58,6 @@ export default function RecruitDetailPage() {
   );
   const isInitiator = currentUserId && recruit?.order?.userId === currentUserId;
 
-  // Level match check
-  const levelMatch = currentLevel && recruit
-    ? currentLevel >= Number(recruit.targetLevel) - Number(recruit.levelTolerance) &&
-      currentLevel <= Number(recruit.targetLevel) + Number(recruit.levelTolerance)
-    : true;
-
   const joinMut = useMutation({
     mutationFn: () => api.post(`/api/recruits/${id}/join`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["recruit", id] }); queryClient.invalidateQueries({ queryKey: ["recruits"] }); toast.success("已加入"); },
@@ -97,6 +91,9 @@ export default function RecruitDetailPage() {
 
   const isRecruiting = recruit.status === "RECRUITING";
   const isFull = joinedCount >= recruit.maxParticipants;
+  const recruitMin = (recruit as Record<string,unknown>).minLevel != null ? Number((recruit as Record<string,unknown>).minLevel) : Number(recruit.targetLevel) - Number(recruit.levelTolerance);
+  const recruitMax = (recruit as Record<string,unknown>).maxLevel != null ? Number((recruit as Record<string,unknown>).maxLevel) : Number(recruit.targetLevel) + Number(recruit.levelTolerance);
+  const levelMatch = !currentLevel || (currentLevel >= recruitMin && currentLevel <= recruitMax);
 
   return (
     <div className="max-w-lg mx-auto space-y-6">
@@ -123,7 +120,7 @@ export default function RecruitDetailPage() {
           </div>
           <div className="flex justify-between"><span className="text-gray-500">场地</span><span>{recruit.order?.court?.name}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">时间</span><span>{new Date(recruit.order?.startAt).toLocaleString("zh-CN")} ~ {new Date(recruit.order?.endAt).toLocaleString("zh-CN")}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">段位要求</span><span>{String(recruit.targetLevel)} ± {String(recruit.levelTolerance)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-500">段位要求</span><span>{recruitMin.toFixed(1)} ~ {recruitMax.toFixed(1)}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">人数</span><span className="font-medium">{joinedCount}/{recruit.maxParticipants}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">截止</span><span>{new Date(recruit.deadline).toLocaleString("zh-CN")}</span></div>
           <div className="flex justify-between">

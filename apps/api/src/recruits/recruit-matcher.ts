@@ -15,16 +15,20 @@ export function isSlotsOverlapping(
 /**
  * Check if two level intervals overlap using integer arithmetic.
  * Each level is stored as Decimal(2,1), e.g. 3.5 → level*10 = 35.
+ * Uses min/max range directly.
  */
 export function isLevelRangeOverlapping(
-  level1: number,
-  tolerance1: number,
-  level2: number,
-  tolerance2: number,
+  reqMin: number,
+  reqMax: number,
+  postMin: number,
+  postMax: number,
 ): boolean {
-  const min1 = Math.round((level1 - tolerance1) * 10);
-  const max1 = Math.round((level1 + tolerance1) * 10);
-  const min2 = Math.round((level2 - tolerance2) * 10);
-  const max2 = Math.round((level2 + tolerance2) * 10);
-  return Math.max(min1, min2) <= Math.min(max1, max2);
+  return Math.max(reqMin, postMin) <= Math.min(reqMax, postMax);
+}
+
+/**
+ * Legacy: compute min/max from targetLevel ± tolerance.
+ */
+export function levelRangeFromTarget(targetLevel: number, tolerance: number): { min: number; max: number } {
+  return { min: targetLevel - tolerance, max: targetLevel + tolerance };
 }

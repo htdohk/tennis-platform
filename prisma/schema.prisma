@@ -208,8 +208,10 @@ model Order {
 model RecruitPost {
   id              String             @id @default(cuid())
   orderId         String             @unique @map("order_id")
-  targetLevel     Decimal            @map("target_level") @db.Decimal(2, 1)
-  levelTolerance  Decimal            @map("level_tolerance") @db.Decimal(2, 1) @default(0.5)
+  targetLevel     Decimal            @map("target_level") @db.Decimal(3, 2)
+  levelTolerance  Decimal            @map("level_tolerance") @db.Decimal(3, 2) @default(0.5)
+  minLevel        Decimal?           @map("min_level") @db.Decimal(2, 1)
+  maxLevel        Decimal?           @map("max_level") @db.Decimal(2, 1)
   maxParticipants Int                @map("max_participants")
   deadline        DateTime
   status          RecruitPostStatus  @default(RECRUITING)
