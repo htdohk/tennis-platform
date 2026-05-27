@@ -201,7 +201,10 @@ export class OrdersService {
   async findMine(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
-      include: { court: { include: { venue: true } } },
+      include: {
+        court: { include: { venue: true } },
+        recruitPost: { include: { participants: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

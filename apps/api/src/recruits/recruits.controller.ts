@@ -73,4 +73,10 @@ export class RecruitsController {
   abandon(@Param('id') id: string, @Req() req: RequestWithUser) {
     return this.recruitsService.abandon(id, req.user.id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/cancel-by-initiator')
+  cancelByInitiator(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.recruitsService.cancelByInitiator(id, req.user.id);
+  }
 }

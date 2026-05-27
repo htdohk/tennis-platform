@@ -77,7 +77,7 @@ export default function MePage() {
     onError: () => toast.error("更新失败"),
   });
 
-  const handleLogout = () => { api.setToken(null); router.push("/"); };
+  const handleLogout = () => { api.setToken(null); localStorage.removeItem("customer_nickname"); window.dispatchEvent(new Event("auth-change")); router.push("/"); };
 
   if (isLoading) return <div className="text-center py-12 text-gray-500">加载中...</div>;
   if (!me) return <div className="text-center py-12 text-gray-500">请先登录</div>;

@@ -127,6 +127,10 @@ export default function BookingPage() {
     const sorted = [...selectedSlots].sort();
     const startTime = sorted[0];
     const lastTime = sorted[sorted.length - 1];
+    const selectedStart = new Date(`${selectedDate}T${startTime}:00`);
+    if (selectedStart <= new Date()) {
+      toast.error("不能预订过去的时段，请重新选择"); return;
+    }
     const [h, m] = lastTime.split(":").map(Number);
     const endMin = h * 60 + m + 30;
     const endTime = `${String(Math.floor(endMin / 60)).padStart(2, "0")}:${String(endMin % 60).padStart(2, "0")}`;
@@ -148,6 +152,14 @@ export default function BookingPage() {
   const endTime = sortedSelected.length > 0
     ? (() => { const lt = sortedSelected[sortedSelected.length - 1]; const [h, m] = lt.split(":").map(Number); const em = h * 60 + m + 30; return `${String(Math.floor(em / 60)).padStart(2, "0")}:${String(em % 60).padStart(2, "0")}`; })()
     : "";
+
+  // Past slot check
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isSlotInPast = (time: string) => {
+    if (selectedDate !== todayStr) return false;
+    const now = new Date();
+    return new Date(`${selectedDate}T${time}:00`) <= new Date(now.getTime() + 30 * 60 * 1000);
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24">
@@ -183,7 +195,7 @@ export default function BookingPage() {
         <Card>
           <CardContent className="p-4 space-y-3">
             <Label>选择日期</Label>
-            <Input type="date" value={selectedDate} onChange={(e) => { setDate(e.target.value); setSlots([]); }} />
+            <Input type="date" value={selectedDate} min={todayStr} onChange={(e) => { setDate(e.target.value); setSlots([]); }} />
           </CardContent>
         </Card>
       )}
@@ -200,17 +212,19 @@ export default function BookingPage() {
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 {slots.map((slot) => {
                   const isSelected = selectedSlots.includes(slot.time);
+                  const inPast = isSlotInPast(slot.time);
+                  const disabled = !slot.available || inPast;
                   return (
                     <button
                       key={slot.time}
                       type="button"
-                      disabled={!slot.available}
+                      disabled={disabled}
                       onClick={() => handleSlotClick(slot.time)}
                       className={cn(
                         "py-2 px-1 text-xs rounded border text-center transition-colors",
                         isSelected && "bg-green-600 text-white border-green-600",
-                        !isSelected && slot.available && "bg-white border-gray-200 hover:border-gray-400 cursor-pointer",
-                        !slot.available && "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed",
+                        !isSelected && !disabled && "bg-white border-gray-200 hover:border-gray-400 cursor-pointer",
+                        disabled && "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed",
                       )}
                     >
                       {slot.time}

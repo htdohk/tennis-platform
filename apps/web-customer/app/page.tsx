@@ -1,12 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "网球馆";
 
 export default function HomePage() {
+  const router = useRouter();
   const { data: venuesRes } = useQuery({
     queryKey: ["venues"],
     queryFn: () => api.get<{ data: { id: string; name: string; address: string; intro: string | null }[] }>("/api/venues"),
@@ -24,9 +27,10 @@ export default function HomePage() {
       <section className="text-center py-12">
         <h1 className="text-3xl font-bold mb-2">{BRAND}</h1>
         <p className="text-gray-500 mb-6">在线预订网球场，轻松找到球友</p>
-        <Link href="/booking" className="inline-block bg-black text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors">
-          立即预订
-        </Link>
+        <div className="flex gap-3 justify-center">
+          <Button size="lg" onClick={() => router.push("/booking")}>立即预订</Button>
+          <Button size="lg" variant="outline" onClick={() => router.push("/recruits")}>查看招募</Button>
+        </div>
       </section>
 
       {venues.length > 0 && (
@@ -51,7 +55,11 @@ export default function HomePage() {
           <h2 className="text-xl font-bold mb-4">进行中的招募</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {recruits.slice(0, 6).map((r) => (
-              <div key={r.id} className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+              <div
+                key={r.id}
+                className="border border-blue-200 bg-blue-50 rounded-xl p-4 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => router.push(`/recruits/${r.id}`)}
+              >
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium">段位 {String(r.targetLevel)}</p>

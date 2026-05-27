@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Navbar } from "@/components/navbar";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -15,16 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="zh-CN">
       <body className="min-h-screen bg-gray-50">
         <Providers>
-          <header className="bg-white border-b sticky top-0 z-30">
-            <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-              <Link href="/" className="font-bold text-lg">{BRAND}</Link>
-              <nav className="flex items-center gap-4 text-sm">
-                <Link href="/" className="text-gray-600 hover:text-black">首页</Link>
-                <Link href="/booking" className="text-gray-600 hover:text-black">预订</Link>
-                <Link href="/me" className="text-gray-600 hover:text-black">我的</Link>
-              </nav>
-            </div>
-          </header>
+          <Navbar />
           <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
         </Providers>
       </body>

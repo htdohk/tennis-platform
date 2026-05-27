@@ -24,6 +24,17 @@ export default function LoginPage() {
       const res = await api.post<{ code: number; data: { accessToken: string } }>("/api/auth/login", { phone, password });
       if (res.code === 0 && res.data?.accessToken) {
         api.setToken(res.data.accessToken);
+
+        try {
+          const meRes = await api.get<{ code: number; data: { nickname: string } }>("/api/auth/me");
+          if (meRes.code === 0 && meRes.data?.nickname) {
+            localStorage.setItem("customer_nickname", meRes.data.nickname);
+            window.dispatchEvent(new Event("auth-change"));
+          }
+        } catch {
+          // get user info failed, skip nickname update
+        }
+
         router.push(redirect);
       } else {
         toast.error("登录失败");

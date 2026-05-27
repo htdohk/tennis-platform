@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PreviewMatchesDto, CreateRecruitDto } from './dto/recruit.dto';
@@ -410,6 +411,23 @@ export class RecruitsService {
         where: { id: post.orderId },
         data: { status: 'CANCELLED' },
       });
+    });
+  }
+
+  async cancelByInitiator(recruitId: string, userId: string) {
+    const recruit = await this.prisma.recruitPost.findUnique({
+      where: { id: recruitId },
+      include: { order: true },
+    });
+    if (!recruit) throw new NotFoundException('招募不存在');
+    if (recruit.order.userId !== userId) throw new ForbiddenException('只有发起人可以取消');
+    if (recruit.status !== 'RECRUITING') throw new BadRequestException('只有招募中的招募可以取消');
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.recruitPost.update({ where: { id: recruitId }, data: { status: 'CANCELLED' } });
+      await tx.order.update({ where: { id: recruit.orderId }, data: { status: 'CANCELLED' } });
+      await tx.auditLog.create({ data: { action: 'RECRUIT_CANCELLED_BY_INITIATOR', target: `recruit_post:${recruitId}`, payload: { userId } } });
+      return { success: true };
     });
   }
 }
