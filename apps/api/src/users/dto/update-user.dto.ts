@@ -16,6 +16,10 @@ export class UpdateUserDto {
   nickname?: string;
 
   @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
   @IsNumber()
   @Validate(IsValidTennisLevel)
   level?: number;

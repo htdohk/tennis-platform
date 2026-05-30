@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
@@ -16,5 +16,10 @@ export class UsersAdminController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateByAdmin(id, dto);
+  }
+
+  @Post(':id/reset-password')
+  async resetPassword(@Param('id') id: string) {
+    return this.usersService.resetPassword(id);
   }
 }

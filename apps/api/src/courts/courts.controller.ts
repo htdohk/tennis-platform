@@ -3,10 +3,12 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import { CourtsService } from './courts.service';
 import { CreateCourtDto } from './dto/create-court.dto';
@@ -37,6 +39,12 @@ export class CourtsController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCourtDto) {
     return this.courtsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  async softDelete(@Param('id') id: string) {
+    await this.courtsService.update(id, { status: 'INACTIVE' });
+    return { success: true };
   }
 
   @Post(':id/maintenance')

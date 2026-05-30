@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { PricesService } from './prices.service';
 import { CreatePriceRuleDto } from './dto/create-price-rule.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
@@ -16,5 +16,10 @@ export class PricesController {
   @Post()
   create(@Body() dto: CreatePriceRuleDto) {
     return this.pricesService.create(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: Partial<CreatePriceRuleDto>) {
+    return this.pricesService.update(id, dto);
   }
 }

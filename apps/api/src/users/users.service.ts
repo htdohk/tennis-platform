@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from '../auth/dto/register.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -97,5 +98,26 @@ export class UsersService {
   async updateByAdmin(id: string, dto: UpdateUserDto) {
     await this.findById(id);
     return this.prisma.user.update({ where: { id }, data: dto });
+  }
+
+  async resetPassword(id: string) {
+    const user = await this.findById(id);
+    const newPassword = this.generatePassword();
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+    return { password: newPassword };
+  }
+
+  private generatePassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    const bytes = crypto.randomBytes(8);
+    for (let i = 0; i < 8; i++) {
+      password += chars[bytes[i] % chars.length];
+    }
+    return password;
   }
 }

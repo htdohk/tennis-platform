@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,7 @@ interface CourtData {
   type: string;
   surface: string;
   status: string;
+  venueId: string;
 }
 
 interface UserData {
@@ -193,18 +195,49 @@ function useUndoableAction(queryClient: ReturnType<typeof useQueryClient>) {
 export default function SchedulePage() {
   const queryClient = useQueryClient();
   const undo = useUndoableAction(queryClient);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [viewMode, setViewMode] = useState<"week" | "day">("week");
   const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDate, setSelectedDate] = useState<string>(fmtDate(new Date()));
-
-  // Fetch venues for business hours
-  const { data: venuesRes } = useQuery({
-    queryKey: ["venues"],
-    queryFn: () => api.get<{ data: { defaultBusinessHours: Record<string, BusinessHours> | null }[] }>("/admin/venues"),
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("date") : null;
+    return d || fmtDate(new Date());
   });
 
+  // Fetch venues for business hours and tabs
+  const { data: venuesRes } = useQuery({
+    queryKey: ["venues"],
+    queryFn: () => api.get<{ data: { id: string; name: string; defaultBusinessHours: Record<string, BusinessHours> | null }[] }>("/admin/venues"),
+  });
+
+  const venues = venuesRes?.data || [];
+  const [initialVenueSet, setInitialVenueSet] = useState(false);
+
+  // Default to first venue from URL param or first venue in list
+  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
+  useEffect(() => {
+    if (initialVenueSet || venues.length === 0) return;
+    const urlVenueId = searchParams.get("venueId");
+    if (urlVenueId) {
+      setSelectedVenueId(urlVenueId);
+    } else if (!selectedVenueId) {
+      setSelectedVenueId(venues[0]?.id || "");
+    }
+    setInitialVenueSet(true);
+  }, [venues, searchParams, initialVenueSet, selectedVenueId]);
+
+  // Update URL when venue filter changes
+  const handleVenueChange = (venueId: string) => {
+    setSelectedVenueId(venueId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("venueId", venueId);
+    router.replace(`/admin/schedule?${params.toString()}`, { scroll: false });
+  };
+
   // Calculate business hours
-  const venueHours = venuesRes?.data?.[0]?.defaultBusinessHours;
+  const selectedVenue = venues.find((v) => v.id === selectedVenueId);
+  const venueHours = (selectedVenue || venuesRes?.data?.[0])?.defaultBusinessHours;
   const weekdayHours = venueHours?.weekday;
   const openTime = weekdayHours?.open || DEFAULT_OPEN;
   const closeTime = weekdayHours?.close || DEFAULT_CLOSE;
@@ -253,10 +286,29 @@ export default function SchedulePage() {
     startTime?: string;
   }>({});
 
-  // Build lookup map: `${courtId}::${date}::${timeKey}` → order
+  // Step 1: filter courts by selected venue
+  const displayCourts = useMemo(() => {
+    const active = courts.filter((c) => c.status !== "INACTIVE");
+    if (!selectedVenueId) return active;
+    return active.filter((c) => c.venueId === selectedVenueId);
+  }, [courts, selectedVenueId]);
+
+  // Step 2: build court ID set
+  const venueCourtIds = useMemo(
+    () => new Set(displayCourts.map((c) => c.id)),
+    [displayCourts],
+  );
+
+  // Step 3: filter orders by venue courts (must come before orderMap)
+  const filteredOrders = useMemo(() => {
+    if (!selectedVenueId) return orders;
+    return orders.filter((o) => venueCourtIds.has(o.courtId));
+  }, [orders, selectedVenueId, venueCourtIds]);
+
+  // Step 4: build order map from filtered orders
   const orderMap = useMemo(() => {
     const map = new Map<string, OrderData>();
-    for (const order of orders) {
+    for (const order of filteredOrders) {
       const start = new Date(order.startAt);
       const end = new Date(order.endAt);
       const date = fmtDate(start);
@@ -268,7 +320,7 @@ export default function SchedulePage() {
       }
     }
     return map;
-  }, [orders]);
+  }, [filteredOrders]);
 
   // Handlers
   const handleSlotClick = (courtId: string, date: string, time: string) => {
@@ -280,13 +332,6 @@ export default function SchedulePage() {
     setSelectedOrder(order);
     setDetailOpen(true);
   };
-
-  // Determine which courts to display
-  const displayCourts = courts.filter((c) => c.status !== "INACTIVE");
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-gray-500">加载中...</div>;
-  }
 
   // Safety: default to 0 slots if computation fails
   const safeTotalSlots = totalSlots > 0 ? totalSlots : 30;
@@ -316,6 +361,21 @@ export default function SchedulePage() {
           const nd = new Date(d); nd.setDate(nd.getDate() + 1); return fmtDate(nd);
         })}>→</Button>
         <Button variant="ghost" size="sm" onClick={() => { setWeekOffset(0); setSelectedDate(fmtDate(new Date())); }}>今天</Button>
+      </div>
+
+      {/* Venue Tabs */}
+      <div className="flex flex-wrap gap-1">
+        {venues.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => handleVenueChange(v.id)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              selectedVenueId === v.id ? "bg-black text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {v.name}
+          </button>
+        ))}
       </div>
 
       {/* Schedule Grid */}
@@ -367,7 +427,7 @@ export default function SchedulePage() {
                 {viewMode === "week"
                   ? weekDays.map((day) => {
                       const date = fmtDate(day);
-                      const order = orders.find((o) => {
+                      const order = filteredOrders.find((o) => {
                         const start = new Date(o.startAt);
                         const end = new Date(o.endAt);
                         const slotDate = new Date(`${date}T${time}:00`);
@@ -589,8 +649,8 @@ function CreateOrderDialog({
             <Label>用户</Label>
             <Select value={userId} onValueChange={(v) => setUserId(v || "")}>
               <SelectTrigger className="w-full"><SelectValue placeholder="选择用户" /></SelectTrigger>
-              <SelectContent className="max-h-[280px]">
-                <div className="sticky top-0 bg-popover p-2 border-b">
+              <SelectContent side="bottom" align="start" className="max-h-[280px]">
+                <div className="sticky top-0 bg-white z-10 border-b px-2 py-1.5">
                   <Input
                     placeholder="搜索用户..."
                     value={userSearch}

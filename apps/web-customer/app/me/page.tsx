@@ -108,8 +108,9 @@ export default function MePage() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button variant="outline" onClick={() => router.push("/me/orders")}>我的订单</Button>
+        <Button variant="outline" onClick={() => router.push("/me/recruits")}>我的招募</Button>
         <Button variant="ghost" onClick={handleLogout} className="text-red-500">退出登录</Button>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
 } from './orders.controller';
 import { AdminOrdersController } from './admin-orders.controller';
 import { AdminScheduleController } from './admin-schedule.controller';
+import { AdminDashboardController } from './admin-dashboard.controller';
 import { PriceCalculator } from './price-calculator';
 
 @Module({
@@ -13,6 +14,7 @@ import { PriceCalculator } from './price-calculator';
     OrdersController,
     AdminOrdersController,
     AdminScheduleController,
+    AdminDashboardController,
     CourtAvailabilityController,
   ],
   providers: [OrdersService, PriceCalculator],
