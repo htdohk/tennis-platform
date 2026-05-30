@@ -12,6 +12,8 @@ interface RecruitData {
   id: string;
   targetLevel: number;
   levelTolerance: number;
+  minLevel?: number | null;
+  maxLevel?: number | null;
   maxParticipants: number;
   deadline: string;
   status: string;
@@ -91,8 +93,8 @@ export default function RecruitDetailPage() {
 
   const isRecruiting = recruit.status === "RECRUITING";
   const isFull = joinedCount >= recruit.maxParticipants;
-  const recruitMin = (recruit as Record<string,unknown>).minLevel != null ? Number((recruit as Record<string,unknown>).minLevel) : Number(recruit.targetLevel) - Number(recruit.levelTolerance);
-  const recruitMax = (recruit as Record<string,unknown>).maxLevel != null ? Number((recruit as Record<string,unknown>).maxLevel) : Number(recruit.targetLevel) + Number(recruit.levelTolerance);
+  const recruitMin = recruit.minLevel != null ? Number(recruit.minLevel) : Number(recruit.targetLevel) - Number(recruit.levelTolerance);
+  const recruitMax = recruit.maxLevel != null ? Number(recruit.maxLevel) : Number(recruit.targetLevel) + Number(recruit.levelTolerance);
   const levelMatch = !currentLevel || (currentLevel >= recruitMin && currentLevel <= recruitMax);
 
   return (

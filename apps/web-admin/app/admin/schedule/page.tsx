@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -192,7 +192,7 @@ function useUndoableAction(queryClient: ReturnType<typeof useQueryClient>) {
 
 // ─── Main Component ────────────────────────────────────
 
-export default function SchedulePage() {
+function SchedulePageInner() {
   const queryClient = useQueryClient();
   const undo = useUndoableAction(queryClient);
   const searchParams = useSearchParams();
@@ -518,6 +518,14 @@ export default function SchedulePage() {
         onMarkPaid={(id) => { setDetailOpen(false); undo("markPaid", id); }}
       />
     </div>
+  );
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-500">加载中...</div>}>
+      <SchedulePageInner />
+    </Suspense>
   );
 }
 

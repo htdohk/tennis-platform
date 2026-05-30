@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -36,7 +36,7 @@ function fillSlotRange(start: string, end: string, allSlots: string[]): string[]
   return allSlots.slice(lo, hi + 1);
 }
 
-export default function BookingPage() {
+function BookingPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const venueIdParam = searchParams.get("venueId");
@@ -276,5 +276,13 @@ export default function BookingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-500">加载中...</div>}>
+      <BookingPageInner />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -16,6 +16,8 @@ interface RecruitData {
   id: string;
   targetLevel: number;
   levelTolerance: number;
+  minLevel?: number | null;
+  maxLevel?: number | null;
   maxParticipants: number;
   deadline: string;
   status: string;
@@ -24,7 +26,7 @@ interface RecruitData {
   participants: { userId: string }[];
 }
 
-export default function RecruitsPage() {
+function RecruitsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab = searchParams.get("tab") || "square";
@@ -61,7 +63,7 @@ export default function RecruitsPage() {
   // Fetch my orders for mine tab
   const { data: myOrdersRes, isLoading: mineLoading } = useQuery({
     queryKey: ["my-orders"],
-    queryFn: () => api.get<{ data: { id: string; startAt: string; endAt: string; status: string; type: string; court: { code: string; name: string }; recruitPost: { id: string; targetLevel: number; levelTolerance: number; maxParticipants: number; deadline: string; status: string; participants: { userId: string; status: string }[] } | null }[] }>("/api/orders/me"),
+    queryFn: () => api.get<{ data: { id: string; startAt: string; endAt: string; status: string; type: string; court: { code: string; name: string }; recruitPost: { id: string; targetLevel: number; levelTolerance: number; minLevel?: number | null; maxLevel?: number | null; maxParticipants: number; deadline: string; status: string; participants: { userId: string; status: string }[] } | null }[] }>("/api/orders/me"),
     enabled: activeTab === "mine" && !!api.getToken(),
   });
 
@@ -133,8 +135,8 @@ export default function RecruitsPage() {
             <div className="space-y-3">
               {recruits.map((r) => {
                 const isOwn = currentUserId === r.order?.userId;
-                const min = (r as Record<string,unknown>).minLevel != null ? Number((r as Record<string,unknown>).minLevel) : Number(r.targetLevel) - Number(r.levelTolerance);
-                const max = (r as Record<string,unknown>).maxLevel != null ? Number((r as Record<string,unknown>).maxLevel) : Number(r.targetLevel) + Number(r.levelTolerance);
+                const min = r.minLevel != null ? Number(r.minLevel) : Number(r.targetLevel) - Number(r.levelTolerance);
+                const max = r.maxLevel != null ? Number(r.maxLevel) : Number(r.targetLevel) + Number(r.levelTolerance);
                 return (
                   <Card key={r.id} className="hover:shadow-sm transition-shadow">
                     <CardContent className="p-4">
@@ -188,8 +190,8 @@ export default function RecruitsPage() {
               ) : (
                 myOrders.filter((o)=>o.type==="RECRUIT"&&o.recruitPost).map((o) => {
                   const rp = o.recruitPost!;
-                  const min = (rp as Record<string,unknown>).minLevel != null ? Number((rp as Record<string,unknown>).minLevel) : Number(rp.targetLevel) - Number(rp.levelTolerance);
-                  const max = (rp as Record<string,unknown>).maxLevel != null ? Number((rp as Record<string,unknown>).maxLevel) : Number(rp.targetLevel) + Number(rp.levelTolerance);
+                  const min = rp.minLevel != null ? Number(rp.minLevel) : Number(rp.targetLevel) - Number(rp.levelTolerance);
+                  const max = rp.maxLevel != null ? Number(rp.maxLevel) : Number(rp.targetLevel) + Number(rp.levelTolerance);
                   const joined = rp.participants?.filter((p: { status: string })=>p.status==="JOINED").length||0;
                   const isOwn = currentUserId !== null; // we don't have userId on order in this response
                   return (
@@ -222,5 +224,13 @@ export default function RecruitsPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RecruitsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-500">加载中...</div>}>
+      <RecruitsPageInner />
+    </Suspense>
   );
 }

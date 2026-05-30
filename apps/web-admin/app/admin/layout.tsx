@@ -24,26 +24,35 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  const [hasToken, setHasToken] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/admin/login";
-  const isClient = typeof window !== "undefined";
 
   useEffect(() => {
-    if (!isLoginPage && !api.getToken()) {
+    setMounted(true);
+    const token = api.getToken();
+    setHasToken(!!token);
+    if (!token && !isLoginPage) {
       router.push("/admin/login");
     }
   }, [router, isLoginPage]);
 
-  // Login page: render cleanly without sidebar or auth check
+  // Login page: render cleanly without sidebar
   if (isLoginPage) {
     return <>{children}</>;
   }
 
-  // Auth guard: wait for token check
-  if (isClient && !api.getToken()) {
-    return null;
+  // SSR + initial render: show blank page to avoid hydration mismatch
+  if (!mounted) {
+    return <div className="min-h-screen bg-gray-50" />;
+  }
+
+  // No token yet (redirecting)
+  if (!hasToken) {
+    return <div className="min-h-screen bg-gray-50" />;
   }
 
   return (
