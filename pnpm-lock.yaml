@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.60.0
+        version: 1.60.0
       '@prisma/adapter-pg':
         specifier: ^7.8.0
         version: 7.8.0
