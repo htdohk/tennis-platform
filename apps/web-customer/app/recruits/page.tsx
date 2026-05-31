@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -21,9 +22,10 @@ interface RecruitData {
   maxParticipants: number;
   deadline: string;
   status: string;
+  isInitiator?: boolean;
   user: { nickname: string; level: number; wechatId: string };
   order: { id: string; userId: string; startAt: string; endAt: string; status: string; court: { id: string; code: string; name: string } };
-  participants: { userId: string }[];
+  participants: { userId: string; status?: string }[];
 }
 
 function RecruitsPageInner() {
@@ -36,19 +38,16 @@ function RecruitsPageInner() {
   const [minLevelFilter, setMinLevelFilter] = useState("all");
   const [maxLevelFilter, setMaxLevelFilter] = useState("all");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentLevel, setCurrentLevel] = useState<number>(0);
 
-  // Get current user
   useEffect(() => {
     const token = api.getToken();
     if (token) {
       api.get<{ data: { id: string; level: string } }>("/api/auth/me").then((res) => {
-        if (res.data) { setCurrentUserId(res.data.id); setCurrentLevel(Number(res.data.level)); }
+        if (res.data) { setCurrentUserId(res.data.id); }
       }).catch(() => {});
     }
   }, []);
 
-  // Fetch recruits for square tab
   const qs: string[] = [];
   if (dateFilter) qs.push(`date=${dateFilter}`);
   if (minLevelFilter !== "all") qs.push(`minLevel=${minLevelFilter}`);
@@ -60,26 +59,28 @@ function RecruitsPageInner() {
     enabled: activeTab === "square",
   });
 
-  // Fetch my orders for mine tab
-  const { data: myOrdersRes, isLoading: mineLoading } = useQuery({
-    queryKey: ["my-orders"],
-    queryFn: () => api.get<{ data: { id: string; startAt: string; endAt: string; status: string; type: string; court: { code: string; name: string }; recruitPost: { id: string; targetLevel: number; levelTolerance: number; minLevel?: number | null; maxLevel?: number | null; maxParticipants: number; deadline: string; status: string; participants: { userId: string; status: string }[] } | null }[] }>("/api/orders/me"),
+  const { data: myRecruitsRes, isLoading: mineLoading } = useQuery({
+    queryKey: ["my-recruits"],
+    queryFn: () => api.get<{ data: RecruitData[] }>("/api/recruits?myOnly=true"),
     enabled: activeTab === "mine" && !!api.getToken(),
   });
 
   const recruits = recruitsRes?.data || [];
-  const myOrders = myOrdersRes?.data || [];
+  const myRecruits = myRecruitsRes?.data || [];
+  const activeRecruits = myRecruits
+    .filter((r) => ["RECRUITING", "CONFIRMED"].includes(r.status));
+  const inactiveRecruits = myRecruits
+    .filter((r) => ["RECRUITING_EXPIRED", "CANCELLED"].includes(r.status));
 
-  // Mutations for mine tab
   const convertMut = useMutation({
     mutationFn: (id: string) => api.patch(`/api/recruits/${id}/convert-to-normal`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["my-orders"] }); toast.success("已转为包场"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["my-recruits"] }); toast.success("已转为包场"); },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "操作失败"),
   });
 
   const abandonMut = useMutation({
     mutationFn: (id: string) => api.patch(`/api/recruits/${id}/abandon`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["my-orders"] }); toast.success("已放弃"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["my-recruits"] }); toast.success("已放弃"); },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "操作失败"),
   });
 
@@ -102,13 +103,12 @@ function RecruitsPageInner() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Tab bar */}
       <div className="flex items-center gap-4 border-b pb-3">
         <button onClick={() => switchTab("square")} className={cn("pb-1 border-b-2 transition-colors", activeTab === "square" ? "font-bold border-black" : "text-gray-500 border-transparent hover:text-black")}>招募广场</button>
         <button onClick={() => switchTab("mine")} className={cn("pb-1 border-b-2 transition-colors", activeTab === "mine" ? "font-bold border-black" : "text-gray-500 border-transparent hover:text-black")}>我的招募</button>
       </div>
 
-      {/* ── Square Tab ── */}
+      {/* Square Tab */}
       {activeTab === "square" && (
         <>
           <div className="flex items-center justify-between">
@@ -175,7 +175,7 @@ function RecruitsPageInner() {
         </>
       )}
 
-      {/* ── Mine Tab ── */}
+      {/* Mine Tab */}
       {activeTab === "mine" && (
         <>
           <h1 className="text-2xl font-bold">我的招募</h1>
@@ -183,41 +183,79 @@ function RecruitsPageInner() {
             <div className="text-center py-12 text-gray-400"><p className="mb-4">请先登录</p><Button onClick={()=>router.push("/login?redirect=/recruits?tab=mine")}>去登录</Button></div>
           ) : mineLoading ? (
             <div className="text-center py-12 text-gray-500">加载中...</div>
+          ) : myRecruits.length === 0 ? (
+            <div className="text-center py-12 text-gray-400"><p className="mb-4">暂无招募</p><Button size="sm" onClick={()=>switchTab("square")}>去看看招募广场</Button></div>
           ) : (
             <div className="space-y-3">
-              {myOrders.filter((o)=>o.type==="RECRUIT"&&o.recruitPost).length===0 ? (
-                <div className="text-center py-12 text-gray-400"><p className="mb-4">暂无招募</p><Button size="sm" onClick={()=>switchTab("square")}>去看看招募广场</Button></div>
-              ) : (
-                myOrders.filter((o)=>o.type==="RECRUIT"&&o.recruitPost).map((o) => {
-                  const rp = o.recruitPost!;
-                  const min = rp.minLevel != null ? Number(rp.minLevel) : Number(rp.targetLevel) - Number(rp.levelTolerance);
-                  const max = rp.maxLevel != null ? Number(rp.maxLevel) : Number(rp.targetLevel) + Number(rp.levelTolerance);
-                  const joined = rp.participants?.filter((p: { status: string })=>p.status==="JOINED").length||0;
-                  const isOwn = currentUserId !== null; // we don't have userId on order in this response
-                  return (
-                    <Card key={o.id}>
-                      <CardContent className="p-4 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{o.court?.code} - {o.court?.name}</span>
-                              <span className={cn("text-xs px-2 py-0.5 rounded font-medium", STATUS_COLORS[rp.status]||"bg-gray-100 text-gray-800")}>{STATUS_LABELS[rp.status]||rp.status}</span>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">{new Date(o.startAt).toLocaleString("zh-CN")} ~ {new Date(o.endAt).toLocaleString("zh-CN")}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">段位 {min} ~ {max} · {joined}/{rp.maxParticipants} 人 · 截止 {new Date(rp.deadline).toLocaleString("zh-CN")}</div>
+              {activeRecruits.map((r) => {
+                const min = r.minLevel != null ? Number(r.minLevel) : Number(r.targetLevel) - Number(r.levelTolerance);
+                const max = r.maxLevel != null ? Number(r.maxLevel) : Number(r.targetLevel) + Number(r.levelTolerance);
+                const joined = r.participants?.filter((p) => p.status !== "LEFT").length || 0;
+                return (
+                  <Card key={r.id}>
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{r.order?.court?.code} - {r.order?.court?.name}</span>
+                            <span className={cn("text-xs px-2 py-0.5 rounded font-medium", STATUS_COLORS[r.status]||"bg-gray-100 text-gray-800")}>{STATUS_LABELS[r.status]||r.status}</span>
+                            {r.isInitiator ? (
+                              <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">发起人</span>
+                            ) : (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">已加入</span>
+                            )}
                           </div>
-                          <Button size="sm" variant="outline" onClick={()=>router.push(`/recruits/${rp.id}`)}>详情</Button>
+                          <div className="text-xs text-gray-500 mt-1">{new Date(r.order?.startAt).toLocaleString("zh-CN")} ~ {new Date(r.order?.endAt).toLocaleString("zh-CN")}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">段位 {min} ~ {max} · {joined}/{r.maxParticipants} 人 · 截止 {new Date(r.deadline).toLocaleString("zh-CN")}</div>
                         </div>
-                        {rp.status==="RECRUITING_EXPIRED" && (
-                          <div className="flex gap-2 pt-1">
-                            <Button size="sm" onClick={()=>convertMut.mutate(rp.id)} disabled={convertMut.isPending}>转为包场</Button>
-                            <Button size="sm" variant="destructive" onClick={()=>abandonMut.mutate(rp.id)} disabled={abandonMut.isPending}>放弃</Button>
+                        <Button size="sm" variant="outline" onClick={()=>router.push(`/recruits/${r.id}`)}>详情</Button>
+                      </div>
+                      {r.status==="RECRUITING_EXPIRED" && r.isInitiator && (
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" onClick={()=>convertMut.mutate(r.id)} disabled={convertMut.isPending}>转为包场</Button>
+                          <Button size="sm" variant="destructive" onClick={()=>abandonMut.mutate(r.id)} disabled={abandonMut.isPending}>放弃</Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {inactiveRecruits.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3 py-2">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-gray-400">历史记录</span>
+                    <Separator className="flex-1" />
+                  </div>
+                  {inactiveRecruits.map((r) => {
+                    const min = r.minLevel != null ? Number(r.minLevel) : Number(r.targetLevel) - Number(r.levelTolerance);
+                    const max = r.maxLevel != null ? Number(r.maxLevel) : Number(r.targetLevel) + Number(r.levelTolerance);
+                    const joined = r.participants?.filter((p) => p.status !== "LEFT").length || 0;
+                    return (
+                      <Card key={r.id} className="opacity-60">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{r.order?.court?.code} - {r.order?.court?.name}</span>
+                                <span className={cn("text-xs px-2 py-0.5 rounded font-medium", STATUS_COLORS[r.status]||"bg-gray-100 text-gray-800")}>{STATUS_LABELS[r.status]||r.status}</span>
+                                {r.isInitiator ? (
+                                  <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded">发起人</span>
+                                ) : (
+                                  <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">已加入</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{new Date(r.order?.startAt).toLocaleString("zh-CN")} ~ {new Date(r.order?.endAt).toLocaleString("zh-CN")}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">段位 {min} ~ {max} · {joined}/{r.maxParticipants} 人</div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={()=>router.push(`/recruits/${r.id}`)}>详情</Button>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}

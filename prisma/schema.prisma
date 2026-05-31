@@ -179,6 +179,8 @@ model User {
   recruitParticipants RecruitParticipant[]
   notifications       Notification[]
   auditLogs           AuditLog[]
+  hermesBindings      HermesBinding[]
+  bindCodes           BindCode[]
 
   @@map("users")
 }
@@ -284,4 +286,31 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id])
 
   @@map("notifications")
+}
+
+model HermesBinding {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  hermesId  String   @map("hermes_id")
+  groupId   String?  @map("group_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([hermesId, groupId])
+  @@map("hermes_bindings")
+}
+
+model BindCode {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  code      String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("bind_codes")
 }

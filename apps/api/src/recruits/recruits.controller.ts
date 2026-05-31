@@ -37,7 +37,12 @@ export class RecruitsController {
     @Query('date') date?: string,
     @Query('minLevel') minLevel?: string,
     @Query('maxLevel') maxLevel?: string,
+    @Query('myOnly') myOnly?: string,
+    @Req() req?: RequestWithUser,
   ) {
+    if (myOnly === 'true' && req?.user) {
+      return this.recruitsService.findMyRecruits(req.user.id);
+    }
     return this.recruitsService.findAll(
       date,
       minLevel ? Number(minLevel) : undefined,

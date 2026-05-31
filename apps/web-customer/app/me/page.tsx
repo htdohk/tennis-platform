@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 
 function EditForm({ me, onSave, onCancel }: {
@@ -58,6 +58,9 @@ export default function MePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [bindCode, setBindCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
     if (!api.getToken()) { router.push("/login?redirect=/me"); return; }
@@ -78,6 +81,40 @@ export default function MePage() {
   });
 
   const handleLogout = () => { api.setToken(null); localStorage.removeItem("customer_nickname"); window.dispatchEvent(new Event("auth-change")); router.push("/"); };
+
+  // Countdown timer
+  useEffect(() => {
+    if (!bindCode) return;
+    const updateCountdown = () => {
+      const remaining = Math.ceil((new Date(bindCode.expiresAt).getTime() - Date.now()) / 60000);
+      if (remaining <= 0) {
+        setBindCode(null);
+        toast.info("绑定码已过期");
+      }
+      setCountdown(remaining > 0 ? remaining : 0);
+    };
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [bindCode]);
+
+  const handleGenerateCode = useCallback(async () => {
+    setGenerating(true);
+    try {
+      const res = await api.post<{ code: number; data: { code: string; expiresAt: string } }>("/api/binding/generate-code");
+      setBindCode(res.data);
+      toast.success("绑定码已生成");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "生成失败");
+    } finally {
+      setGenerating(false);
+    }
+  }, []);
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(`绑定 ${code}`);
+    toast.success("已复制");
+  };
 
   if (isLoading) return <div className="text-center py-12 text-gray-500">加载中...</div>;
   if (!me) return <div className="text-center py-12 text-gray-500">请先登录</div>;
@@ -108,9 +145,40 @@ export default function MePage() {
         </CardContent>
       </Card>
 
+      {/* WeChat Binding */}
+      <Card>
+        <CardHeader>
+          <CardTitle>微信群绑定</CardTitle>
+          <CardDescription>
+            绑定后，Hermes 助手可在微信群中自动识别你的身份
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {bindCode ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500">在微信群对助手说：</p>
+              <div className="flex items-center gap-2">
+                <code className="text-2xl font-mono font-bold tracking-widest bg-gray-100 px-4 py-2 rounded">
+                  绑定 {bindCode.code}
+                </code>
+                <Button variant="ghost" size="sm" onClick={() => copyCode(bindCode.code)}>
+                  复制
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400">
+                {countdown > 0 ? `${countdown} 分钟内有效` : "已过期"}
+              </p>
+            </div>
+          ) : (
+            <Button onClick={handleGenerateCode} disabled={generating}>
+              {generating ? "生成中..." : "生成绑定码"}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-2 flex-wrap">
-        <Button variant="outline" onClick={() => router.push("/me/orders")}>我的订单</Button>
-        <Button variant="outline" onClick={() => router.push("/me/recruits")}>我的招募</Button>
+        <Button variant="outline" onClick={() => router.push("/booking?tab=mine")}>我的预订</Button>
         <Button variant="ghost" onClick={handleLogout} className="text-red-500">退出登录</Button>
       </div>
     </div>

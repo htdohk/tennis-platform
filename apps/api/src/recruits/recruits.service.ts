@@ -289,4 +289,45 @@ export class RecruitsService {
       return { success: true };
     });
   }
+
+  async findMyRecruits(userId: string) {
+    const posts = await this.prisma.recruitPost.findMany({
+      where: {
+        OR: [
+          { order: { userId } },
+          { participants: { some: { userId, status: 'JOINED' } } },
+        ],
+      },
+      include: {
+        order: {
+          include: {
+            user: { select: { nickname: true, level: true, wechatId: true } },
+            court: true,
+          },
+        },
+        participants: { select: { id: true, userId: true, status: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return posts.map((p) => {
+      const minLvl = p.minLevel != null ? Number(p.minLevel) : Number(p.targetLevel) - Number(p.levelTolerance);
+      const maxLvl = p.maxLevel != null ? Number(p.maxLevel) : Number(p.targetLevel) + Number(p.levelTolerance);
+      return {
+        id: p.id,
+        targetLevel: p.targetLevel,
+        levelTolerance: p.levelTolerance,
+        minLevel: minLvl,
+        maxLevel: maxLvl,
+        maxParticipants: p.maxParticipants,
+        deadline: p.deadline,
+        status: p.status,
+        createdAt: p.createdAt,
+        user: p.order.user,
+        order: { ...p.order, user: undefined },
+        participants: p.participants,
+        isInitiator: p.order.userId === userId,
+      };
+    });
+  }
 }

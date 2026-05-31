@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +28,6 @@ function saveDraft(draft: Record<string, unknown>) {
   sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
 }
 
-// Get all time strings between start and end (inclusive of start, exclusive of end)
 function fillSlotRange(start: string, end: string, allSlots: string[]): string[] {
   const startIdx = allSlots.indexOf(start);
   const endIdx = allSlots.indexOf(end);
@@ -36,10 +36,24 @@ function fillSlotRange(start: string, end: string, allSlots: string[]): string[]
   return allSlots.slice(lo, hi + 1);
 }
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING_CONFIRM: "待确认", CONFIRMED: "已确认", COMPLETED: "已完成",
+  CANCELLED: "已取消", RECRUITING: "招募中", RECRUITING_EXPIRED: "招募失效",
+};
+
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  PENDING_CONFIRM: "bg-yellow-100 text-yellow-800",
+  CONFIRMED: "bg-green-100 text-green-800",
+  COMPLETED: "bg-gray-100 text-gray-600",
+  CANCELLED: "bg-red-100 text-red-800",
+  RECRUITING_EXPIRED: "bg-red-100 text-red-800",
+};
+
 function BookingPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const venueIdParam = searchParams.get("venueId");
+  const activeTab = searchParams.get("tab") || "book";
   const draft = loadDraft();
 
   const [selectedVenueId, setVenueId] = useState(draft.venueId || venueIdParam || "");
@@ -50,7 +64,6 @@ function BookingPageInner() {
 
   const isLoggedIn = typeof window !== "undefined" && !!api.getToken();
 
-  // Persist to sessionStorage
   useEffect(() => {
     if (selectedVenueId || selectedCourtId || selectedDate || selectedSlots.length > 0) {
       saveDraft({
@@ -62,14 +75,12 @@ function BookingPageInner() {
     }
   }, [selectedVenueId, selectedCourtId, selectedDate, selectedSlots]);
 
-  // Fetch venues
   const { data: venuesRes } = useQuery({
     queryKey: ["venues"],
     queryFn: () => api.get<{ data: { id: string; name: string }[] }>("/api/venues"),
   });
   const venues = venuesRes?.data || [];
 
-  // Fetch courts
   const { data: courtsRes } = useQuery({
     queryKey: ["courts", selectedVenueId],
     queryFn: () => api.get<{ data: CourtData[] }>(`/api/venues/${selectedVenueId}/courts`),
@@ -77,7 +88,6 @@ function BookingPageInner() {
   });
   const courts = courtsRes?.data || [];
 
-  // Fetch availability
   const { data: availabilityRes, isLoading: availLoading } = useQuery({
     queryKey: ["availability", selectedCourtId, selectedDate],
     queryFn: () => api.get<{ data: SlotData[] }>(`/api/courts/${selectedCourtId}/availability?date=${selectedDate}`),
@@ -85,10 +95,22 @@ function BookingPageInner() {
   });
   const slots = availabilityRes?.data || [];
 
-  // Available slot time strings
+  const { data: myOrdersRes, isLoading: mineLoading } = useQuery({
+    queryKey: ["my-orders"],
+    queryFn: () => api.get<{ data: { id: string; startAt: string; endAt: string; status: string; type: string; court: { code: string; name: string }; totalPrice: string }[] }>("/api/orders/me"),
+    enabled: activeTab === "mine" && isLoggedIn,
+  });
+
+  const myOrders = myOrdersRes?.data || [];
+  const activeOrders = myOrders
+    .filter((o) => ["PENDING_CONFIRM", "CONFIRMED"].includes(o.status))
+    .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  const inactiveOrders = myOrders
+    .filter((o) => ["COMPLETED", "CANCELLED", "RECRUITING_EXPIRED"].includes(o.status))
+    .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+
   const slotTimes = slots.map((s) => s.time);
 
-  // Create order
   const createMut = useMutation({
     mutationFn: (data: { courtId: string; startAt: string; endAt: string; notes?: string }) =>
       api.post<{ code: number; data: { id: string } }>("/api/orders", data),
@@ -102,13 +124,10 @@ function BookingPageInner() {
 
   const handleSlotClick = (time: string) => {
     if (selectedSlots.length === 0) {
-      // First click: select single slot
       setSlots([time]);
     } else if (selectedSlots.includes(time)) {
-      // Click already selected: deselect all
       setSlots([]);
     } else {
-      // Click a different slot: fill range from first selected to this one
       const anchor = selectedSlots.sort()[0];
       const range = fillSlotRange(anchor, time, slotTimes);
       setSlots(range);
@@ -153,7 +172,6 @@ function BookingPageInner() {
     ? (() => { const lt = sortedSelected[sortedSelected.length - 1]; const [h, m] = lt.split(":").map(Number); const em = h * 60 + m + 30; return `${String(Math.floor(em / 60)).padStart(2, "0")}:${String(em % 60).padStart(2, "0")}`; })()
     : "";
 
-  // Past slot check
   const todayStr = new Date().toISOString().split("T")[0];
   const isSlotInPast = (time: string) => {
     if (selectedDate !== todayStr) return false;
@@ -161,120 +179,196 @@ function BookingPageInner() {
     return new Date(`${selectedDate}T${time}:00`) <= new Date(now.getTime() + 30 * 60 * 1000);
   };
 
+  const switchTab = (tab: string) => {
+    router.push(`/booking${tab === "mine" ? "?tab=mine" : ""}`, { scroll: false });
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24">
-      <h1 className="text-2xl font-bold">预订场地</h1>
-
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <Label>选择场馆</Label>
-          <Select value={selectedVenueId} onValueChange={(v) => { setVenueId(v || ""); setCourtId(""); }}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="请选择场馆">{selectedVenueName}</SelectValue></SelectTrigger>
-            <SelectContent className="max-h-[280px]">
-              {venues.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {selectedVenueId && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Label>选择场地</Label>
-            <Select value={selectedCourtId} onValueChange={(v) => setCourtId(v || "")}>
-              <SelectTrigger className="w-full"><SelectValue placeholder="请选择场地">{selectedCourtName}</SelectValue></SelectTrigger>
-              <SelectContent className="max-h-[280px]">
-                {courts.map((c) => <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
-      )}
-
-      {selectedCourtId && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Label>选择日期</Label>
-            <Input type="date" value={selectedDate} min={todayStr} onChange={(e) => { setDate(e.target.value); setSlots([]); }} />
-          </CardContent>
-        </Card>
-      )}
-
-      {selectedDate && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <Label>选择时段（点击开始格子，再点结束格子选择连续时段）</Label>
-            {availLoading ? (
-              <div className="text-center py-4 text-gray-400">加载中...</div>
-            ) : slots.length === 0 ? (
-              <div className="text-center py-4 text-gray-400">该日期暂无可用时段</div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                {slots.map((slot) => {
-                  const isSelected = selectedSlots.includes(slot.time);
-                  const inPast = isSlotInPast(slot.time);
-                  const disabled = !slot.available || inPast;
-                  return (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => handleSlotClick(slot.time)}
-                      className={cn(
-                        "py-2 px-1 text-xs rounded border text-center transition-colors",
-                        isSelected && "bg-green-600 text-white border-green-600",
-                        !isSelected && !disabled && "bg-white border-gray-200 hover:border-gray-400 cursor-pointer",
-                        disabled && "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed",
-                      )}
-                    >
-                      {slot.time}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {selectedSlots.length > 0 && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">已选时段</span>
-              <span className="font-medium">{startTime} ~ {endTime}（{duration} 小时）</span>
-            </div>
-            <div>
-              <Label>备注</Label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="如有特殊需求请备注（可选）" />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Sticky bottom submit bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-30">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
-          <div className="text-sm">
-            {selectedSlots.length > 0 ? (
-              <span>
-                <span className="text-gray-500">已选 </span>
-                <span className="font-medium">{duration} 小时</span>
-                <span className="text-gray-400 ml-2">{startTime} ~ {endTime}</span>
-              </span>
-            ) : (
-              <span className="text-gray-400">请先选择时段</span>
-            )}
-          </div>
-          <Button
-            onClick={handleSubmit}
-            disabled={selectedSlots.length === 0 || createMut.isPending}
-            className="min-w-[140px]"
-          >
-            {createMut.isPending ? "提交中..." : isLoggedIn ? "提交订单" : "登录后提交"}
-          </Button>
-        </div>
+      {/* Tab bar */}
+      <div className="flex items-center gap-4 border-b pb-3">
+        <button onClick={() => switchTab("book")} className={cn("pb-1 border-b-2 transition-colors", activeTab !== "mine" ? "font-bold border-black" : "text-gray-500 border-transparent hover:text-black")}>预订场地</button>
+        <button onClick={() => switchTab("mine")} className={cn("pb-1 border-b-2 transition-colors", activeTab === "mine" ? "font-bold border-black" : "text-gray-500 border-transparent hover:text-black")}>我的预订</button>
       </div>
+
+      {/* Book Tab */}
+      {activeTab !== "mine" && (
+        <>
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <Label>选择场馆</Label>
+              <Select value={selectedVenueId} onValueChange={(v) => { setVenueId(v || ""); setCourtId(""); }}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="请选择场馆">{selectedVenueName}</SelectValue></SelectTrigger>
+                <SelectContent className="max-h-[280px]">
+                  {venues.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {selectedVenueId && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <Label>选择场地</Label>
+                <Select value={selectedCourtId} onValueChange={(v) => setCourtId(v || "")}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="请选择场地">{selectedCourtName}</SelectValue></SelectTrigger>
+                  <SelectContent className="max-h-[280px]">
+                    {courts.map((c) => <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedCourtId && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <Label>选择日期</Label>
+                <Input type="date" value={selectedDate} min={todayStr} onChange={(e) => { setDate(e.target.value); setSlots([]); }} />
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedDate && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <Label>选择时段（点击开始格子，再点结束格子选择连续时段）</Label>
+                {availLoading ? (
+                  <div className="text-center py-4 text-gray-400">加载中...</div>
+                ) : slots.length === 0 ? (
+                  <div className="text-center py-4 text-gray-400">该日期暂无可用时段</div>
+                ) : (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {slots.map((slot) => {
+                      const isSelected = selectedSlots.includes(slot.time);
+                      const inPast = isSlotInPast(slot.time);
+                      const disabled = !slot.available || inPast;
+                      return (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => handleSlotClick(slot.time)}
+                          className={cn(
+                            "py-2 px-1 text-xs rounded border text-center transition-colors",
+                            isSelected && "bg-green-600 text-white border-green-600",
+                            !isSelected && !disabled && "bg-white border-gray-200 hover:border-gray-400 cursor-pointer",
+                            disabled && "bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed",
+                          )}
+                        >
+                          {slot.time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedSlots.length > 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">已选时段</span>
+                  <span className="font-medium">{startTime} ~ {endTime}（{duration} 小时）</span>
+                </div>
+                <div>
+                  <Label>备注</Label>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="如有特殊需求请备注（可选）" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-30">
+            <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+              <div className="text-sm">
+                {selectedSlots.length > 0 ? (
+                  <span>
+                    <span className="text-gray-500">已选 </span>
+                    <span className="font-medium">{duration} 小时</span>
+                    <span className="text-gray-400 ml-2">{startTime} ~ {endTime}</span>
+                  </span>
+                ) : (
+                  <span className="text-gray-400">请先选择时段</span>
+                )}
+              </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={selectedSlots.length === 0 || createMut.isPending}
+                className="min-w-[140px]"
+              >
+                {createMut.isPending ? "提交中..." : isLoggedIn ? "提交订单" : "登录后提交"}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Mine Tab */}
+      {activeTab === "mine" && (
+        <>
+          {!isLoggedIn ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="mb-4">请先登录</p>
+              <Button onClick={() => router.push("/login?redirect=/booking?tab=mine")}>去登录</Button>
+            </div>
+          ) : mineLoading ? (
+            <div className="text-center py-12 text-gray-500">加载中...</div>
+          ) : myOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="mb-4">暂无订单</p>
+              <Button size="sm" onClick={() => switchTab("book")}>去预订场地</Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activeOrders.map((o) => (
+                <Card key={o.id} className="cursor-pointer hover:shadow-sm transition-shadow" onClick={() => router.push(`/orders/${o.id}`)}>
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{o.court?.name}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(o.startAt).toLocaleString("zh-CN")} ~ {new Date(o.endAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      {o.totalPrice && <p className="text-xs text-gray-400">¥{Number(o.totalPrice)}</p>}
+                    </div>
+                    <span className={cn("text-xs px-2 py-1 rounded", ORDER_STATUS_COLORS[o.status] || "bg-gray-100 text-gray-800")}>
+                      {ORDER_STATUS_LABELS[o.status] || o.status}
+                    </span>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {inactiveOrders.length > 0 && (
+                <>
+                  <div className="flex items-center gap-3 py-2">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-gray-400">历史记录</span>
+                    <Separator className="flex-1" />
+                  </div>
+                  {inactiveOrders.map((o) => (
+                    <Card key={o.id} className="cursor-pointer hover:shadow-sm transition-shadow opacity-60" onClick={() => router.push(`/orders/${o.id}`)}>
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{o.court?.name}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(o.startAt).toLocaleString("zh-CN")} ~ {new Date(o.endAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          {o.totalPrice && <p className="text-xs text-gray-400">¥{Number(o.totalPrice)}</p>}
+                        </div>
+                        <span className={cn("text-xs px-2 py-1 rounded", ORDER_STATUS_COLORS[o.status] || "bg-gray-100 text-gray-800")}>
+                          {ORDER_STATUS_LABELS[o.status] || o.status}
+                        </span>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

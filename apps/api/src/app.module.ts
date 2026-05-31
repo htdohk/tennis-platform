@@ -13,6 +13,7 @@ import { RecruitsModule } from './recruits/recruits.module';
 import { JobsModule } from './jobs/jobs.module';
 import { HealthModule } from './health/health.module';
 import { InternalModule } from './internal/internal.module';
+import { BindingModule } from './binding/binding.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { ResponseWrapperInterceptor } from './common/interceptors/response-wrapper.interceptor';
@@ -32,6 +33,7 @@ import { ResponseWrapperInterceptor } from './common/interceptors/response-wrapp
     JobsModule,
     HealthModule,
     InternalModule,
+    BindingModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },

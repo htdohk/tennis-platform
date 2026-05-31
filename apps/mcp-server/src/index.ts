@@ -387,6 +387,58 @@ server.tool(
   },
 );
 
+// ─── Tool 10: verify_bind_code ───
+server.tool(
+  "verify_bind_code",
+  "验证用户提供的绑定码，将微信群发言者与网站账号绑定。当用户说「绑定 XXXXXX」时调用此工具。",
+  {
+    code: z.string().describe("6位绑定码，由用户在网站上生成"),
+    hermesId: z.string().describe("发言者在群内的唯一标识"),
+    groupId: z.string().optional().describe("可选，微信群ID"),
+  },
+  async (args) => {
+    const result = await apiFetch<{
+      success: boolean;
+      userId?: string;
+      nickname?: string;
+      message: string;
+    }>("/internal/binding/verify", {
+      method: "POST",
+      body: JSON.stringify({
+        code: args.code,
+        hermesId: args.hermesId,
+        groupId: args.groupId,
+      }),
+    });
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// ─── Tool 11: get_user_by_hermes_id ───
+server.tool(
+  "get_user_by_hermes_id",
+  "通过群内发言者ID查找已绑定的网站账号。在处理任何需要身份验证的请求前调用此工具。",
+  {
+    hermesId: z.string().describe("发言者在群内的唯一标识"),
+    groupId: z.string().optional().describe("可选，微信群ID"),
+  },
+  async (args) => {
+    const params = new URLSearchParams({ hermesId: args.hermesId });
+    if (args.groupId) params.set("groupId", args.groupId);
+    const user = await apiFetch<{
+      userId: string;
+      nickname: string;
+      level: string;
+      wechatId: string;
+    } | null>(`/internal/binding/user?${params.toString()}`);
+    return {
+      content: [{ type: "text", text: JSON.stringify(user, null, 2) }],
+    };
+  },
+);
+
 // ─── Start ───
 async function main() {
   const transport = new StdioServerTransport();
