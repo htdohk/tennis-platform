@@ -15,6 +15,11 @@
     "db:seed": "tsx prisma/seed.ts",
     "test:db": "vitest run tests/db/",
     "test:e2e": "npx playwright test tests/e2e/ --reporter=list",
+    "kill": "bash scripts/kill-ports.sh",
+    "dev:start": "bash scripts/dev.sh",
+    "docker:up": "bash scripts/docker-up.sh",
+    "docker:down": "bash scripts/docker-down.sh",
+    "db:reset": "bash scripts/reset-db.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {

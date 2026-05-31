@@ -65,16 +65,34 @@
 ## 常用命令
 
 ```bash
-pnpm dev                          # 启动全部开发服务
+# 开发
+pnpm dev:start                    # 一键启动开发模式 (DB + API + 前端)
+pnpm kill                         # 清理所有开发端口
+pnpm dev                          # turbo 并行启动全部 dev 脚本
 pnpm db:up                        # 启动 PG + Redis
 pnpm db:down                      # 关闭
+
+# Docker 部署
+pnpm docker:up                    # 构建并启动生产环境
+pnpm docker:down                  # 停止生产环境
+
+# 数据库
+pnpm db:reset                     # 重置数据库到初始状态
 pnpm prisma migrate dev           # 应用 migration
+pnpm prisma generate              # 重新生成 Prisma client
 pnpm prisma studio                # 数据库可视化
-pnpm test                         # 跑全部测试
+
+# 测试
+pnpm test                         # 跑全部单元测试
+pnpm test:e2e                     # 跑 Playwright E2E 测试
 pnpm --filter api test            # 跑 API 测试
 pnpm --filter api test:e2e        # 跑 API e2e 测试
+pnpm test:db                      # 跑 DB 连通性测试
+
+# 代码质量
 pnpm lint
 pnpm typecheck
+pnpm format
 
 ## 不要做的事
 ❌ 不要在没有完成测试的情况下提交代码
