@@ -15,12 +15,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const request = ctx.getRequest<Response>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     const code = -1;
     let message = 'Internal server error';
-    let details: unknown;
+    const isDev = process.env.NODE_ENV !== 'production';
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -30,11 +30,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       } else if (typeof body === 'object' && body !== null) {
         const b = body as Record<string, unknown>;
         message = (b.message as string) || exception.message;
-        details = b;
       }
     } else if (exception instanceof Error) {
       message = exception.message;
-      details = exception.stack;
     }
 
     this.logger.error(
@@ -42,10 +40,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : undefined,
     );
 
+    const errorName =
+      exception instanceof HttpException
+        ? exception.name
+        : 'InternalServerError';
+
     response.status(status).json({
       code,
       message,
-      ...(details && process.env.NODE_ENV !== 'production' ? { details } : {}),
+      details: {
+        message: exception instanceof Error ? exception.message : 'Unknown error',
+        error: errorName,
+        statusCode: status,
+        ...(isDev && exception instanceof Error ? { stack: exception.stack } : {}),
+      },
     });
   }
 }

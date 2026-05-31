@@ -11,6 +11,7 @@ out/
 .env
 .env.local
 .env.production
+.env.dev.backup
 
 # IDE
 .idea/

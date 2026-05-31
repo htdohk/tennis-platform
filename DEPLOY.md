@@ -206,3 +206,78 @@ docker compose logs api         # API 日志
 docker compose logs nginx        # Nginx 日志
 docker compose logs postgres     # 数据库日志
 ```
+
+## 远程服务器部署
+
+当目标服务器已有 PostgreSQL 和 Redis 服务时（如通过 1Panel 管理），使用 `docker-compose.prod.yml` 部署应用层即可。
+
+### 部署步骤
+
+```bash
+# 1. 在远程服务器上拉取项目
+git clone <your-repo-url> tennis-platform
+cd tennis-platform
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env，指向你的外部数据库和 Redis：
+#   DATABASE_URL=postgresql://user:pass@your-pg-host:5432/tennis
+#   REDIS_URL=redis://:password@your-redis-host:6379
+#   JWT_SECRET=<随机字符串>
+#   MCP_INTERNAL_TOKEN=<随机字符串>
+vim .env
+
+# 3. 使用生产配置启动（不含 postgres/redis 容器）
+docker compose -f docker-compose.prod.yml up -d
+
+# 4. 检查服务状态
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs api | head -20
+```
+
+### .env 关键配置（远程服务器）
+
+```bash
+# 外部数据库（由 1Panel 或其他方式管理）
+DATABASE_URL=postgresql://tennis_user:your_password@192.168.1.100:5432/tennis
+REDIS_URL=redis://:your_redis_password@192.168.1.100:6379
+
+# 安全密钥（务必生成随机字符串）
+JWT_SECRET=$(openssl rand -base64 32)
+SESSION_SECRET=$(openssl rand -base64 32)
+MCP_INTERNAL_TOKEN=$(openssl rand -base64 32)
+
+# 域名配置
+PUBLIC_WEB_BASE_URL=https://tennis.your-domain.com
+NEXT_PUBLIC_API_BASE_URL=https://tennis.your-domain.com/api
+```
+
+### 1Panel 面板配置说明（占位）
+
+> 以下步骤待实际部署时补充。
+
+1. 在 1Panel 中创建 PostgreSQL 数据库 `tennis` 和用户
+2. 在 1Panel 中确认 Redis 连接信息
+3. 将 `DATABASE_URL` 和 `REDIS_URL` 填入 `.env`
+4. 如果使用 1Panel 的 Nginx 反向代理，可禁用 `docker-compose.prod.yml` 中的 nginx 服务，改为在 1Panel 中配置反向代理规则
+5. 启动应用容器后，在 1Panel 的容器管理中监控运行状态
+
+### 镜像推送（Docker Hub）
+
+```bash
+# 构建并标记镜像
+docker compose build
+
+# 推送到 Docker Hub
+docker push your-dockerhub-username/tennis-platform-api:latest
+docker push your-dockerhub-username/tennis-platform-web-admin:latest
+docker push your-dockerhub-username/tennis-platform-web-customer:latest
+docker push your-dockerhub-username/tennis-platform-mcp-server:latest
+```
+
+推送后，远程服务器可直接拉取镜像，无需重新构建：
+
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```

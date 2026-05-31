@@ -36,7 +36,7 @@ export class PriceCalculator {
   }
 
   private getDateType(date: Date): DateType {
-    const day = date.getUTCDay();
+    const day = date.getDay();
     if (day === 0 || day === 6) return 'WEEKEND';
     return 'WEEKDAY';
   }
@@ -56,6 +56,6 @@ export class PriceCalculator {
       const [h, m] = timeOrDate.split(':').map(Number);
       return h * 60 + m;
     }
-    return timeOrDate.getUTCHours() * 60 + timeOrDate.getUTCMinutes();
+    return timeOrDate.getHours() * 60 + timeOrDate.getMinutes();
   }
 }
