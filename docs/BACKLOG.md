@@ -129,3 +129,10 @@
 
 - 来源：M13 验证后用户提出
 - 优先级：M14 完成后处理
+
+## UI Hydration 警告（低优先级）
+- [ ] venues 页面：DialogTrigger 内嵌 Button 导致 <button> 嵌套警告
+  - 修复：DialogTrigger 用 asChild 属性，或改用 div 包裹
+- [ ] booking 页面：提交按钮文字 SSR/客户端不一致（hydration mismatch）
+  - 修复：按钮文字用 useEffect 延迟设置，SSR 阶段统一显示「提交订单」
+  - 来源：M14 E2E 验证日志
