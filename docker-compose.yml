@@ -28,6 +28,8 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       PORT: 3000
+      DATABASE_URL: postgresql://dev:dev@postgres:5432/tennis
+      REDIS_URL: redis://redis:6379
     env_file: .env
     depends_on:
       postgres:
