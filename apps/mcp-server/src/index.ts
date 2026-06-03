@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
+import express from "express";
 
 const API_BASE = process.env.INTERNAL_API_BASE_URL || "http://localhost:3000";
 const INTERNAL_TOKEN = process.env.MCP_INTERNAL_TOKEN || "change-this-internal-token";
@@ -440,11 +442,115 @@ server.tool(
 );
 
 // ─── Start ───
+const transport_mode = process.env.MCP_TRANSPORT || "stdio";
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  // Stderr is used for logging in stdio-based MCP servers (stdout is for protocol messages)
-  console.error(`Tennis MCP Server started, API base: ${API_BASE}`);
+  if (transport_mode === "http") {
+    // ─── HTTP/SSE Transport ───
+    const app = express();
+    const port = parseInt(process.env.MCP_SERVER_PORT || "3100");
+
+    app.use(express.json());
+
+    // CORS: allow Hermes server to connect
+    const corsOrigin = process.env.MCP_CORS_ORIGIN || "*";
+    app.use((_req, res, next) => {
+      res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+      res.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET, POST, OPTIONS",
+      );
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, X-Internal-Token",
+      );
+      if (_req.method === "OPTIONS") {
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+
+    // Auth middleware for SSE and messages endpoints
+    const authMiddleware = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      const token = req.headers["x-internal-token"] as string;
+      if (token !== INTERNAL_TOKEN) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      next();
+    };
+
+    // Store active transports (one per SSE connection)
+    const transports = new Map<string, SSEServerTransport>();
+
+    // SSE endpoint - Hermes connects here for long-lived streaming
+    app.get("/sse", authMiddleware, async (req, res) => {
+      const sessionId =
+        Math.random().toString(36).slice(2) +
+        Date.now().toString(36);
+      const transport = new SSEServerTransport(
+        `/messages?sessionId=${sessionId}`,
+        res,
+      );
+      transports.set(sessionId, transport);
+
+      res.on("close", () => {
+        transports.delete(sessionId);
+        console.error(
+          `[Tennis MCP] SSE client disconnected: ${sessionId}`,
+        );
+      });
+
+      await server.connect(transport);
+      console.error(
+        `[Tennis MCP] SSE client connected: ${sessionId}`,
+      );
+    });
+
+    // Messages endpoint - handles MCP protocol messages from client
+    app.post(
+      "/messages",
+      authMiddleware,
+      async (req, res) => {
+        const sessionId = req.query.sessionId as string;
+        const transport = transports.get(sessionId);
+        if (!transport) {
+          res.status(404).json({ error: "Session not found" });
+          return;
+        }
+        await transport.handlePostMessage(req, res, req.body);
+      },
+    );
+
+    // Health check
+    app.get("/health", (_req, res) => {
+      res.json({
+        status: "ok",
+        transport: "http/sse",
+        activeSessions: transports.size,
+      });
+    });
+
+    app.listen(port, "0.0.0.0", () => {
+      console.error(
+        `Tennis MCP Server (HTTP/SSE) running on port ${port}`,
+      );
+      console.error(`SSE endpoint: http://0.0.0.0:${port}/sse`);
+      console.error(`Health check: http://0.0.0.0:${port}/health`);
+    });
+  } else {
+    // ─── Stdio Transport (backward compatible) ───
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error(
+      `Tennis MCP Server started (stdio mode), API base: ${API_BASE}`,
+    );
+  }
 }
 
 main().catch((err) => {
