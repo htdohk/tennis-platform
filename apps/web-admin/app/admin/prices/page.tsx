@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface PriceRule { id: string; dateType: string; timeSlotType: string; timeStart: string; timeEnd: string; pricePer30min: string; venueId: string }
@@ -20,6 +20,7 @@ interface PriceRule { id: string; dateType: string; timeSlotType: string; timeSt
 export default function PricesPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [dialogKey, setDialogKey] = useState(0);
   const [editing, setEditing] = useState<PriceRule | null>(null);
   const [venueFilter, setVenueFilter] = useState("");
 
@@ -51,33 +52,40 @@ export default function PricesPage() {
   const openEdit = (p: PriceRule) => {
     setEditing(p);
     form.reset({ venueId: p.venueId, dateType: p.dateType, timeSlotType: p.timeSlotType, timeStart: p.timeStart, timeEnd: p.timeEnd, pricePer30min: String(p.pricePer30min) });
+    setDialogKey((k) => k + 1);
     setOpen(true);
   };
+
+  const handleOpenChange = useCallback((v: boolean) => {
+    setOpen(v);
+    if (v) setDialogKey((k) => k + 1);
+    if (!v) { setEditing(null); form.reset(); }
+  }, [form]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">价格管理</h1>
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditing(null); form.reset(); } }}>
+        <Dialog key={dialogKey} open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger><Button><Plus className="h-4 w-4 mr-1" />新增价格规则</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editing ? "编辑价格规则" : "新增价格规则"}</DialogTitle></DialogHeader>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <div><Label>场馆</Label>
-                <Select value={form.watch("venueId")} onValueChange={(v) => { if (v) form.setValue("venueId", v); }}>
+                <Select defaultValue={editing?.venueId || ""} onValueChange={(v) => { if (v) form.setValue("venueId", v); }}>
                   <SelectTrigger><SelectValue placeholder="选择场馆" /></SelectTrigger>
                   <SelectContent>{(venues?.data || []).map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><Label>日期类型</Label>
-                  <Select value={form.watch("dateType")} onValueChange={(v) => { if (v) form.setValue("dateType", v); }}>
+                  <Select defaultValue={editing?.dateType || "WEEKDAY"} onValueChange={(v) => { if (v) form.setValue("dateType", v); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="WEEKDAY">工作日</SelectItem><SelectItem value="WEEKEND">周末</SelectItem><SelectItem value="HOLIDAY">节假日</SelectItem></SelectContent>
                   </Select>
                 </div>
                 <div><Label>时段类型</Label>
-                  <Select value={form.watch("timeSlotType")} onValueChange={(v) => { if (v) form.setValue("timeSlotType", v); }}>
+                  <Select defaultValue={editing?.timeSlotType || "MORNING"} onValueChange={(v) => { if (v) form.setValue("timeSlotType", v); }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="MORNING">早场</SelectItem><SelectItem value="DAY">日场</SelectItem><SelectItem value="EVENING">晚场</SelectItem></SelectContent>
                   </Select>

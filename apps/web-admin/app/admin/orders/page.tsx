@@ -93,12 +93,12 @@ function useUndoableAction(queryClient: ReturnType<typeof useQueryClient>) {
           const msg = e instanceof Error ? e.message : "操作失败";
           toast.error(msg);
         }
-      }, 10000);
+      }, 3000);
 
       timerRef.current = timer;
 
       toastIdRef.current = toast(`即将${ACTION_LABELS[action]}...`, {
-        duration: 10000,
+        duration: 3000,
         action: {
           label: "撤销",
           onClick: () => {

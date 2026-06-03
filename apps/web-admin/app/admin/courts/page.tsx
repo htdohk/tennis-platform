@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Wrench, Trash2, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Court { id: string; code: string; name: string; type: string; surface: string; status: string; venueId: string }
@@ -23,7 +23,9 @@ const TYPE_MAP: Record<string, string> = { INDOOR: "室内", OUTDOOR: "室外" }
 export default function CourtsPage() {
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createKey, setCreateKey] = useState(0);
   const [editOpen, setEditOpen] = useState(false);
+  const [editKey, setEditKey] = useState(0);
   const [editing, setEditing] = useState<Court | null>(null);
   const [maintOpen, setMaintOpen] = useState(false);
   const [maintCourtId, setMaintCourtId] = useState("");
@@ -54,11 +56,22 @@ export default function CourtsPage() {
 
   const getVenueName = (venueId: string) => (venues?.data || []).find((v) => v.id === venueId)?.name || "";
 
+  const handleCreateOpen = useCallback((v: boolean) => {
+    setCreateOpen(v);
+    if (v) setCreateKey((k) => k + 1);
+    if (!v) createForm.reset();
+  }, [createForm]);
+
+  const handleEditOpen = useCallback((v: boolean) => {
+    setEditOpen(v);
+    if (!v) setEditing(null);
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">场地管理</h1>
-        <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) createForm.reset(); }}>
+        <Dialog key={createKey} open={createOpen} onOpenChange={handleCreateOpen}>
           <DialogTrigger><Button><Plus className="h-4 w-4 mr-1" />新增场地</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>新增场地</DialogTitle></DialogHeader>
@@ -118,7 +131,7 @@ export default function CourtsPage() {
               <TableCell>{c.status === "AVAILABLE" ? "可用" : c.status === "INACTIVE" ? "已停用" : c.status}</TableCell>
               <TableCell>
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(c); editForm.reset({ code: c.code, name: c.name, type: c.type, surface: c.surface, status: c.status }); setEditOpen(true); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setEditing(c); editForm.reset({ code: c.code, name: c.name, type: c.type, surface: c.surface, status: c.status }); setEditKey((k) => k + 1); setEditOpen(true); }}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => { setMaintCourtId(c.id); setMaintOpen(true); }}>
@@ -137,7 +150,7 @@ export default function CourtsPage() {
       </Table>
 
       {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) setEditing(null); }}>
+      <Dialog key={editKey} open={editOpen} onOpenChange={handleEditOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑场地</DialogTitle></DialogHeader>
           <form onSubmit={editForm.handleSubmit((d) => editing && editMut.mutate({ id: editing.id, d }))} className="space-y-4">
@@ -147,20 +160,20 @@ export default function CourtsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>类型</Label>
-                <Select value={editForm.watch("type")} onValueChange={(v) => { if (v) editForm.setValue("type", v); }}>
+                <Select defaultValue={editing?.type} onValueChange={(v) => { if (v) editForm.setValue("type", v); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="INDOOR">室内</SelectItem><SelectItem value="OUTDOOR">室外</SelectItem></SelectContent>
                 </Select>
               </div>
               <div><Label>地面</Label>
-                <Select value={editForm.watch("surface")} onValueChange={(v) => { if (v) editForm.setValue("surface", v); }}>
+                <Select defaultValue={editing?.surface} onValueChange={(v) => { if (v) editForm.setValue("surface", v); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="HARD">硬地</SelectItem><SelectItem value="CLAY">红土</SelectItem><SelectItem value="SYNTHETIC">人工草地</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
             <div><Label>状态</Label>
-              <Select value={editForm.watch("status")} onValueChange={(v) => { if (v) editForm.setValue("status", v); }}>
+              <Select defaultValue={editing?.status} onValueChange={(v) => { if (v) editForm.setValue("status", v); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="AVAILABLE">可用</SelectItem><SelectItem value="INACTIVE">已停用</SelectItem></SelectContent>
               </Select>

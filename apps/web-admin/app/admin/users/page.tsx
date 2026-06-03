@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pencil, Ban, CheckCircle, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 interface User { id: string; phone: string; nickname: string; level: string; wechatId: string; gender: string | null; role: string; status: string; createdAt: string }
 
@@ -23,6 +23,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
+  const [dialogKey, setDialogKey] = useState(0);
   const [resetPwOpen, setResetPwOpen] = useState(false);
   const [resetPwUser, setResetPwUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -94,7 +95,7 @@ export default function UsersPage() {
               </TableCell>
               <TableCell>
                 <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(u); form.reset({ nickname: u.nickname, phone: u.phone, level: String(u.level), wechatId: u.wechatId, gender: u.gender || "none", status: u.status }); setOpen(true); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setEditing(u); form.reset({ nickname: u.nickname, phone: u.phone, level: String(u.level), wechatId: u.wechatId, gender: u.gender || "none", status: u.status }); setDialogKey((k) => k + 1); setOpen(true); }}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => updateMut.mutate({ id: u.id, d: { status: u.status === "ACTIVE" ? "BANNED" : "ACTIVE" } })}>
@@ -108,21 +109,21 @@ export default function UsersPage() {
       </Table>
 
       {/* Edit Dialog */}
-      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}>
+      <Dialog key={dialogKey} open={open} onOpenChange={(v) => { setOpen(v); if (!v) setEditing(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>编辑用户</DialogTitle></DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div><Label>昵称</Label><Input {...form.register("nickname")} /></div>
             <div><Label>手机号</Label><Input {...form.register("phone")} /></div>
             <div><Label>段位</Label>
-              <Select value={form.watch("level")} onValueChange={(v) => { if (v) form.setValue("level", v); }}>
+              <Select defaultValue={editing ? String(editing.level) : ""} onValueChange={(v) => { if (v) form.setValue("level", v); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{LEVELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div><Label>微信号</Label><Input {...form.register("wechatId")} /></div>
             <div><Label>性别</Label>
-              <Select value={form.watch("gender") || "none"} onValueChange={(v) => { if (v) form.setValue("gender", v === "none" ? "" : v); }}>
+              <Select defaultValue={editing?.gender || "none"} onValueChange={(v) => { if (v) form.setValue("gender", v === "none" ? "" : v); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">不设置</SelectItem>
@@ -133,7 +134,7 @@ export default function UsersPage() {
               </Select>
             </div>
             <div><Label>状态</Label>
-              <Select value={form.watch("status")} onValueChange={(v) => { if (v) form.setValue("status", v); }}>
+              <Select defaultValue={editing?.status || ""} onValueChange={(v) => { if (v) form.setValue("status", v); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ACTIVE">正常</SelectItem>
