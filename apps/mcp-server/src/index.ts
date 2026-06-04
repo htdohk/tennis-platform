@@ -488,15 +488,13 @@ async function main() {
     // Store active transports (one per SSE connection)
     const transports = new Map<string, SSEServerTransport>();
 
-    const pathPrefix = process.env.MCP_PATH_PREFIX || "";
-
     // SSE endpoint - Hermes connects here for long-lived streaming
-    app.get(`${pathPrefix}/sse`, authMiddleware, async (req, res) => {
+    app.get("/mcp/sse", authMiddleware, async (req, res) => {
       const sessionId =
         Math.random().toString(36).slice(2) +
         Date.now().toString(36);
       const transport = new SSEServerTransport(
-        `${pathPrefix}/messages?sessionId=${sessionId}`,
+        `/mcp/messages?sessionId=${sessionId}`,
         res,
       );
       transports.set(sessionId, transport);
@@ -516,7 +514,7 @@ async function main() {
 
     // Messages endpoint - handles MCP protocol messages from client
     app.post(
-      `${pathPrefix}/messages`,
+      "/mcp/messages",
       authMiddleware,
       async (req, res) => {
         const sessionId = req.query.sessionId as string;
@@ -530,12 +528,11 @@ async function main() {
     );
 
     // Health check
-    app.get(`${pathPrefix}/health`, (_req, res) => {
+    app.get("/mcp/health", (_req, res) => {
       res.json({
         status: "ok",
         transport: "http/sse",
         activeSessions: transports.size,
-        prefix: pathPrefix || "/",
       });
     });
 
@@ -543,12 +540,8 @@ async function main() {
       console.error(
         `Tennis MCP Server (HTTP/SSE) running on port ${port}`,
       );
-      console.error(
-        `SSE endpoint: http://0.0.0.0:${port}${pathPrefix}/sse`,
-      );
-      console.error(
-        `Health check: http://0.0.0.0:${port}${pathPrefix}/health`,
-      );
+      console.error(`SSE endpoint: http://0.0.0.0:${port}/mcp/sse`);
+      console.error(`Health check: http://0.0.0.0:${port}/mcp/health`);
     });
   } else {
     // ─── Stdio Transport (backward compatible) ───
