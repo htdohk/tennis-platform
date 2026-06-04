@@ -490,13 +490,11 @@ async function main() {
 
     // SSE endpoint - Hermes connects here for long-lived streaming
     app.get("/mcp/sse", authMiddleware, async (req, res) => {
-      const sessionId =
-        Math.random().toString(36).slice(2) +
-        Date.now().toString(36);
-      const transport = new SSEServerTransport(
-        `/mcp/messages?sessionId=${sessionId}`,
-        res,
-      );
+      const transport = new SSEServerTransport(`/mcp/messages`, res);
+      await server.connect(transport);
+
+      // Use SDK-generated sessionId (not our own — SDK ignores ours and generates a UUID)
+      const sessionId = transport.sessionId;
       transports.set(sessionId, transport);
 
       res.on("close", () => {
@@ -506,7 +504,6 @@ async function main() {
         );
       });
 
-      await server.connect(transport);
       console.error(
         `[Tennis MCP] SSE client connected: ${sessionId}`,
       );
